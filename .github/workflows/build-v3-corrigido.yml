@@ -1,4 +1,4 @@
-name: 🚀 Build APK - SUCESSO V2 (EAS INIT FIXED)
+name: 🎯 Build APK - CORRIGIDO V3 (Package Names Fixed)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    name: 📱 Build Android APK - SUCESSO V2
+    name: 📱 Build Android APK - V3 CORRIGIDO
     runs-on: ubuntu-latest
     
     steps:
@@ -35,13 +35,17 @@ jobs:
       - name: 🔧 Setup Expo and EAS CLI
         run: |
           echo "🔧 Instalando Expo CLI e EAS CLI..."
-          npm install -g @expo/cli@latest eas-cli@latest
+          npm install -g @expo/cli@latest
+          npm install -g eas-cli@latest
+          echo "✅ CLIs instalados:"
+          npx expo --version
+          npx eas --version
 
       - name: 🔐 Authenticate with Expo
         run: |
           echo "🔐 Autenticando com Expo..."
           export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
-          echo "✅ Token configurado"
+          echo "✅ Token configurado para autenticação"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -111,13 +115,17 @@ jobs:
           echo "🔧 Inicializando projeto EAS..."
           export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
           
+          # Verificar quem está logado
+          echo "👤 Verificando usuário autenticado:"
+          npx expo whoami || echo "Não logado ainda"
+          
           # Inicializar projeto EAS com ID específico
           echo "📋 Configurando projeto EAS com ID: 84ea4587-b864-4560-a167-05855903311c"
           npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
           
           # Verificar configuração
           echo "📄 Verificando configuração do projeto:"
-          npx eas project:info || echo "Projeto configurado"
+          npx eas project:info
           
           echo "✅ EAS project inicializado com sucesso!"
         env:
@@ -131,7 +139,12 @@ jobs:
           # Configurar ambiente
           export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
           
-          # Executar build (projeto já configurado)
+          # Verificar configuração antes do build
+          echo "🔍 Verificações finais:"
+          npx eas project:info
+          cat app.json | grep -A5 -B5 projectId
+          
+          # Executar build
           echo "🚀 Executando build..."
           npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
           
