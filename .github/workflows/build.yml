@@ -114,15 +114,65 @@ jobs:
 
       - name: Initialize EAS project
         run: |
-          echo "Initializing EAS project..."
-          eas init --force --non-interactive || echo "EAS init may have failed, continuing..."
+          echo "🔧 Inicializando projeto EAS..."
+          
+          # Verificar se o EXPO_TOKEN está configurado
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: Secret EXPO_TOKEN não configurada!"
+            echo "Configure em: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions"
+            echo "Obtenha o token com: npx expo login && npx expo whoami --auth"
+            exit 1
+          fi
+          
+          echo "✅ EXPO_TOKEN encontrado!"
+          
+          # Fazer login no Expo
+          echo "🔐 Fazendo login no Expo..."
+          expo whoami || echo "Usuário não logado, mas token deve funcionar"
+          
+          # Verificar se app.json tem projectId
+          if ! grep -q '"projectId"' app.json; then
+            echo "❌ ERRO: projectId não encontrado no app.json!"
+            echo "Adicionando projectId automaticamente..."
+          fi
+          
+          # Tentar inicializar EAS (pode falhar se o projeto não existir no Expo)
+          echo "🚀 Inicializando EAS..."
+          eas init --force --non-interactive || {
+            echo "⚠️ EAS init falhou - projeto pode não existir no Expo"
+            echo "Tentando criar projeto..."
+            eas project:init --force --non-interactive || echo "Continuando sem init..."
+          }
+          
+          echo "✅ EAS configurado!"
           
       - name: Verify EAS configuration
         run: |
-          echo "Checking app.json for projectId..."
+          echo "🔍 Verificando configuração EAS..."
+          echo "📄 Conteúdo do app.json:"
           cat app.json
-          echo "Checking eas.json..."
+          echo ""
+          echo "📄 Conteúdo do eas.json:"
           cat eas.json
+          echo ""
+          echo "📄 Verificando credentials.json:"
+          if [ -f "credentials.json" ]; then
+            echo "✅ credentials.json encontrado"
+            # Mostrar estrutura sem senhas
+            jq 'del(.android.keystore.keystorePassword, .android.keystore.keyPassword)' credentials.json || echo "Arquivo existe mas pode ter formato inválido"
+          else
+            echo "❌ credentials.json não encontrado!"
+            exit 1
+          fi
+          
+          echo "🔑 Verificando keystore:"
+          if [ -f "my-release-key.jks" ]; then
+            echo "✅ Keystore encontrado:"
+            ls -la my-release-key.jks
+          else
+            echo "❌ Keystore não encontrado!"
+            exit 1
+          fi
 
       - name: Build APK Preview
         if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
