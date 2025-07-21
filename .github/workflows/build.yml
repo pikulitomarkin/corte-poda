@@ -60,11 +60,42 @@ jobs:
       - name: Setup Android Keystore
         run: |
           echo "Setting up Android credentials..."
-          if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
-            
-            # Create credentials.json with actual values
-            cat > credentials.json << EOF
+          
+          # Verificar se todas as secrets existem
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "❌ ERRO: Secret ANDROID_KEYSTORE não configurada!"
+            echo "Configure em: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "❌ ERRO: Secret ANDROID_KEYSTORE_PASSWORD não configurada!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "❌ ERRO: Secret ANDROID_KEY_ALIAS não configurada!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "❌ ERRO: Secret ANDROID_KEY_PASSWORD não configurada!"
+            exit 1
+          fi
+          
+          echo "✅ Todas as secrets encontradas!"
+          
+          # Decodificar keystore
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Verificar se o keystore foi criado
+          if [ ! -f "my-release-key.jks" ]; then
+            echo "❌ ERRO: Falha ao criar keystore!"
+            exit 1
+          fi
+          
+          # Create credentials.json with actual values
+          cat > credentials.json << EOF
           {
             "android": {
               "keystore": {
@@ -76,14 +107,10 @@ jobs:
             }
           }
           EOF
-            
-            echo "✅ Android keystore and credentials configured successfully"
-            ls -la my-release-key.jks
-            echo "Credentials file created with secrets"
-          else
-            echo "⚠️ No Android keystore configured - build will fail"
-            exit 1
-          fi
+          
+          echo "✅ Android keystore e credentials.json configurados!"
+          ls -la my-release-key.jks
+          echo "✅ Arquivo credentials.json criado com secrets"
 
       - name: Initialize EAS project
         run: |
