@@ -3,8 +3,9 @@
     "name": "Corte de Matos",
     "slug": "corte-matos-app",
     "version": "1.0.0",
+    "owner": "pikulitomarkin",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "platforms": ["ios", "android", "web"],
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
