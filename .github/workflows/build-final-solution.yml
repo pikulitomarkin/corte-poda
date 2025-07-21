@@ -1,0 +1,116 @@
+name: 🚀 Build APK - Corte de Matos (FINAL SOLUTION)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore configurado!"
+
+      - name: 🔧 Configure EAS Project
+        run: |
+          echo "🔧 Configurando projeto EAS..."
+          
+          # Definir as respostas para o eas build
+          echo "🎯 Executando build com configuração automática..."
+          
+          # Usar expect para automatizar as respostas
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          # Criar script expect
+          cat > build_script.exp << 'EOF'
+          #!/usr/bin/expect -f
+          set timeout 300
+          
+          spawn eas build --platform android --profile preview
+          
+          expect {
+            "*Would you like to automatically create an EAS project*" {
+              send "y\r"
+              exp_continue
+            }
+            "*Link to existing project*" {
+              send "y\r"
+              exp_continue
+            }
+            "*Select the project*" {
+              send "corte-matos-app\r"
+              exp_continue
+            }
+            "*Continue*" {
+              send "y\r"
+              exp_continue
+            }
+            eof
+          }
+          EOF
+          
+          chmod +x build_script.exp
+          
+          echo "✅ Script de configuração criado!"
+
+      - name: 🔨 Build APK with automated responses
+        run: |
+          echo "🔨 Executando build com automação..."
+          
+          # Executar o script expect
+          ./build_script.exp
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Success
+        run: |
+          echo "🎉 Build finalizado!"
+          echo "🌐 Veja os builds em: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"

@@ -1,0 +1,75 @@
+name: 💯 Build APK - Corte de Matos (ULTIMATE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore configurado!"
+
+      - name: 🔨 Build with auto-responses
+        run: |
+          echo "🔨 Executando build com respostas automáticas..."
+          
+          # Criar arquivo com respostas automáticas
+          echo -e "y\ny\n" | eas build --platform android --profile ${{ github.event.inputs.profile }} --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CI: true
+
+      - name: ✅ Success
+        run: |
+          echo "🎉 Build concluído com sucesso!"
+          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
