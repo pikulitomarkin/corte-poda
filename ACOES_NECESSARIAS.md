@@ -30,25 +30,25 @@ Acesse: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions
 - `ANDROID_KEY_ALIAS` = my-key-alias
 - `ANDROID_KEY_PASSWORD` = Mesma senha do keystore
 
-### 4️⃣ EXECUTAR BUILD
-1. GitHub → Actions → "Build APK - Corte de Matos App"
+### 4️⃣ EXECUTAR BUILD (WORKFLOW CORRIGIDO)
+1. GitHub → Actions → **"🔨 Build APK - Corte de Matos (SIMPLES)"** ← NOVO!
 2. "Run workflow" → "preview" → "Run workflow"
 
-**💡 NOTA:** O projeto Expo será criado automaticamente durante o primeiro build!
+**💡 NOTA:** Use o novo workflow simplificado que resolve o erro do npm!
 
 ## 📋 CHECKLIST:
-- [ ] Token Expo obtido (script obter-token-expo.bat)
-- [ ] Token configurado como EXPO_TOKEN no GitHub
-- [ ] Keystore gerado
-- [ ] 5 secrets configuradas no GitHub
+- [x] Token Expo obtido (script obter-token-expo.bat)
+- [x] Token configurado como EXPO_TOKEN no GitHub
+- [x] Keystore gerado
+- [x] 5 secrets configuradas no GitHub
 - [ ] Build executado no GitHub Actions
 
 ## 🎯 STATUS:
 - ✅ **Código corrigido e enviado para GitHub**
-- ✅ **Script simplificado criado (obter-token-expo.bat)**
-- ✅ **Workflow otimizado para criar projeto automaticamente**
-- ❌ **PENDENTE: Você executar obter-token-expo.bat**
-- ❌ **PENDENTE: Configurar secrets e executar build**
+- ✅ **Token Expo configurado**
+- ✅ **Keystore e secrets configurados**
+- ✅ **ERRO NPM CORRIGIDO - Workflow simplificado criado**
+- ❌ **PENDENTE: Executar NOVO workflow (build-simple.yml)**
 
 ## 📞 SE PRECISAR DE AJUDA:
 1. Execute .\obter-token-expo.bat PRIMEIRO (só login + token)

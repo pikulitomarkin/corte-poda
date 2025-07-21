@@ -1,0 +1,116 @@
+name: 🔨 Build APK - Corte de Matos (SIMPLES)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔍 Verify all secrets
+        run: |
+          echo "🔍 Verificando secrets obrigatórias..."
+          
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: EXPO_TOKEN não configurado!"
+            echo "Configure em: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_ALIAS não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          echo "✅ Todas as 5 secrets configuradas corretamente!"
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore Android..."
+          
+          # Criar keystore a partir do base64
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Verificar se foi criado
+          if [ ! -f "my-release-key.jks" ]; then
+            echo "❌ ERRO: Falha ao criar keystore!"
+            exit 1
+          fi
+          
+          # Criar credentials.json
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore e credentials.json configurados!"
+          ls -la my-release-key.jks
+
+      - name: 🔨 Build APK with EAS
+        run: |
+          echo "🔨 Iniciando build do APK..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Build com EAS
+          eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+
+      - name: ✅ Build completed
+        run: |
+          echo "🎉 Build concluído com sucesso!"
+          echo "📱 APK gerado para o profile: ${{ github.event.inputs.profile }}"
+          echo "🔗 Baixe o APK no painel do EAS Build"
