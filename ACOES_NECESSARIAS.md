@@ -1,4 +1,13 @@
-# 🎯 AÇÕES NECESSÁRIAS - GitHub Actions Build
+# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW DEFINITIVO)
+1. GitHub → Actions → **"🎯 Build APK - Corte de Matos (DEFINITIVO)"** ← MAIS NOVO!
+2. "Run workflow" → "preview" → "Run workflow"
+
+**💡 CORREÇÕES APLICADAS:**
+- ✅ Node.js 20 (resolve incompatibilidade)
+- ✅ NPM em vez de Yarn (mais estável)
+- ✅ Autenticação melhorada
+- ✅ Variáveis de ambiente explícitas
+- ✅ **eas init automático** (resolve "EAS project not configured")d
 
 ## ✅ PROBLEMAS RESOLVIDOS:
 1. ❌ `credentials.json must exist` → ✅ **CORRIGIDO**
@@ -7,6 +16,7 @@
 4. ❌ Workflow sem validações → ✅ **CORRIGIDO**
 5. ❌ `npm error could not determine executable` → ✅ **CORRIGIDO COM NOVO WORKFLOW**
 6. ❌ `Node.js incompatibility` → ✅ **CORRIGIDO - Node.js 20 + NPM**
+7. ❌ `EAS project not configured` → ✅ **CORRIGIDO - eas init automático**
 
 ## 🚀 PRÓXIMAS AÇÕES (VOCÊ DEVE FAZER):
 
@@ -53,8 +63,9 @@ Acesse: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions
 - ✅ **Código corrigido e enviado para GitHub**
 - ✅ **Token Expo configurado**
 - ✅ **Keystore e secrets configurados**
-- ✅ **ERRO NPM CORRIGIDO - Workflow simplificado criado**
-- ❌ **PENDENTE: Executar NOVO workflow (build-simple.yml)**
+- ✅ **ERRO NPM CORRIGIDO - Workflow Node.js 20**
+- ✅ **ERRO EAS INIT CORRIGIDO - Workflow definitivo**
+- ❌ **PENDENTE: Executar workflow DEFINITIVO (build-definitivo.yml)**
 
 ## 📞 SE PRECISAR DE AJUDA:
 1. Execute .\obter-token-expo.bat PRIMEIRO (só login + token)
