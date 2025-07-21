@@ -1,12 +1,12 @@
-# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW SUCESSO)
-1. GitHub → Actions → **"✅ Build APK - Corte de Matos (SUCESSO)"** ← MAIS NOVO!
+# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW ULTIMATE)
+1. GitHub → Actions → **"💯 Build APK - Corte de Matos (ULTIMATE)"** ← FINAL!
 2. "Run workflow" → "preview" → "Run workflow"
 
-**💡 PROJETO JÁ EXISTE:**
-- ✅ Projeto: `@pikulito/corte-matos-app` (encontrado!)
-- ✅ ProjectId: `84ea4587-b864-4560-a167-05855903311c` (adicionado)
-- ✅ Sem eas init (usa projeto existente)
-- ✅ Build direto com EASd
+**💡 NOVA ESTRATÉGIA:**
+- ✅ Remove flag --non-interactive
+- ✅ Respostas automáticas (y\ny\n)
+- ✅ Deixa EAS configurar interativamente
+- ✅ Sem conflitos de projeto existented
 
 ## ✅ PROBLEMAS RESOLVIDOS:
 1. ❌ `credentials.json must exist` → ✅ **CORRIGIDO**

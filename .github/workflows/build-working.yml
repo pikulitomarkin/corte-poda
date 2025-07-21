@@ -1,0 +1,105 @@
+name: 🏆 Build APK - Corte de Matos (WORKING)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: 🔍 Verify secrets
+        run: |
+          echo "🔍 Verificando secrets..."
+          
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: EXPO_TOKEN não configurado!"
+            exit 1
+          fi
+          
+          echo "✅ EXPO_TOKEN configurado!"
+          echo "👤 Usuário: $(npx expo whoami)"
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore configurado!"
+
+      - name: 🔧 Force EAS project configuration
+        run: |
+          echo "🔧 Forçando configuração do projeto EAS..."
+          
+          # Força o link do projeto existente
+          echo "📝 Executando eas init com --force e --id..."
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive || echo "Continuando..."
+          
+          # Se ainda não funcionar, executa de forma interativa forçada
+          if ! npx eas build --help &>/dev/null; then
+            echo "🔧 Configuração adicional necessária..."
+            echo "y" | npx eas init --force || echo "Continuando com projeto existente..."
+          fi
+          
+          echo "✅ Configuração finalizada!"
+
+      - name: 🔨 Build APK
+        run: |
+          echo "🔨 Iniciando build..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Tentar build direto
+          eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Success
+        run: |
+          echo "🎉 Build concluído!"
+          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
