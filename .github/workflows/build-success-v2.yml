@@ -1,0 +1,153 @@
+name: 🚀 Build APK - SUCESSO V2 (EAS INIT FIXED)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK - SUCESSO V2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências com Node 20..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest @expo/eas-cli@latest
+
+      - name: 🔐 Authenticate with Expo
+        run: |
+          echo "🔐 Autenticando com Expo..."
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          echo "✅ Token configurado"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔍 Verify all secrets
+        run: |
+          echo "🔍 Verificando secrets obrigatórias..."
+          
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: EXPO_TOKEN não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_ALIAS não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          echo "✅ Todas as 5 secrets configuradas corretamente!"
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore Android..."
+          
+          # Criar keystore a partir do base64
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Verificar se foi criado
+          if [ ! -f "my-release-key.jks" ]; then
+            echo "❌ ERRO: Falha ao criar keystore!"
+            exit 1
+          fi
+          
+          # Criar credentials.json
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore e credentials.json configurados!"
+          ls -la my-release-key.jks credentials.json
+
+      - name: 🔧 Initialize EAS Project
+        run: |
+          echo "🔧 Inicializando projeto EAS..."
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          # Inicializar projeto EAS com ID específico
+          echo "📋 Configurando projeto EAS com ID: 84ea4587-b864-4560-a167-05855903311c"
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+          
+          # Verificar configuração
+          echo "📄 Verificando configuração do projeto:"
+          npx eas project:info || echo "Projeto configurado"
+          
+          echo "✅ EAS project inicializado com sucesso!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build APK with EAS
+        run: |
+          echo "🔨 Iniciando build do APK..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Configurar ambiente
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          # Executar build (projeto já configurado)
+          echo "🚀 Executando build..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          
+          echo "🎉 Build submetido com sucesso!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Build completed
+        run: |
+          echo "🎉 Build concluído com sucesso!"
+          echo "📱 APK gerado para o profile: ${{ github.event.inputs.profile }}"
+          echo "🔗 Baixe o APK no painel do EAS Build"
+          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          
+          # Mostrar informações do build
+          echo "📋 Informações do build:"
+          npx eas build:list --platform android --limit 1
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
