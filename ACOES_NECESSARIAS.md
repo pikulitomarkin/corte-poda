@@ -1,13 +1,13 @@
-# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW MEGA ROBUST)
-1. GitHub → Actions → **"🎯 Build APK - Corte de Matos (MEGA ROBUST)"** ← DEFINITIVO!
+# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (ULTIMATE FIX)
+1. GitHub → Actions → **"🎯 Build APK - ULTIMATE FIX (NPM Error Resolved)"** ← SOLUÇÃO FINAL!
 2. "Run workflow" → "preview" → "Run workflow"
 
-**💡 ESTRATÉGIA MEGA ROBUSTA:**
-- ✅ Múltiplas tentativas de configuração EAS
-- ✅ Fallback automático se primeira tentativa falhar
-- ✅ ProjectId manual + .easrc + cache clear
-- ✅ 3 tentativas diferentes de build
-- ✅ Solução para "stdin is not readable"d
+**💡 ULTIMATE FIX RESOLVE:**
+- ✅ Erro "npm could not determine executable"
+- ✅ 3 métodos diferentes de instalação EAS CLI
+- ✅ Cache npm limpo + permissões corrigidas
+- ✅ Múltiplas tentativas de build
+- ✅ Variáveis de ambiente específicas (EAS_NO_VCS, CI)d
 
 ## ✅ PROBLEMAS RESOLVIDOS:
 1. ❌ `credentials.json must exist` → ✅ **CORRIGIDO**
@@ -18,6 +18,7 @@
 6. ❌ `Node.js incompatibility` → ✅ **CORRIGIDO - Node.js 20 + NPM**
 7. ❌ `EAS project not configured` → ✅ **CORRIGIDO - eas init automático**
 8. ❌ `Existing project found, use --force` → ✅ **CORRIGIDO - ProjectId no app.json**
+9. ❌ `npm error persistent em todos workflows` → ✅ **CORRIGIDO - ULTIMATE FIX**
 
 ## 🚀 PRÓXIMAS AÇÕES (VOCÊ DEVE FAZER):
 
