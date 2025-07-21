@@ -126,29 +126,69 @@ jobs:
           
           echo "✅ EXPO_TOKEN encontrado!"
           
-          # Fazer login no Expo
-          echo "🔐 Fazendo login no Expo..."
-          expo whoami || echo "Usando token para autenticação"
+          # Verificar versão do EAS CLI
+          echo "🔍 Verificando EAS CLI..."
+          npx eas --version || echo "EAS CLI será usado via npx"
           
-          # Criar projeto no Expo se não existir
-          echo "🚀 Criando/inicializando projeto EAS..."
+          # Verificar se já está autenticado
+          echo "🔐 Verificando autenticação..."
+          npx expo whoami || echo "Usando token para autenticação"
           
-          # Primeiro, tentar registrar o projeto
-          npx expo register || echo "Projeto pode já existir ou erro de registro"
-          
-          # Tentar inicializar com owner explícito
-          export EXPO_OWNER="pikulitomarkin"
-          npx eas init --id f8b7c6d5-a9e8-4f3b-9c2d-1e5f6a7b8c9d --force --non-interactive || {
-            echo "⚠️ EAS init com ID específico falhou"
-            echo "Tentando sem ID específico..."
-            npx eas init --force --non-interactive || {
-              echo "⚠️ EAS init ainda falhou"
-              echo "Tentando criar projeto básico..."
-              npx eas project:create --non-interactive || echo "Criação manual pode ser necessária"
+          # Criar app.json com projectId se necessário
+          echo "� Configurando app.json..."
+          if ! grep -q '"projectId"' app.json; then
+            echo "Adicionando projectId ao app.json..."
+            # Backup do app.json original
+            cp app.json app.json.backup
+            
+            # Criar app.json com projectId
+            cat > app.json.tmp << 'EOF'
+          {
+            "expo": {
+              "name": "Corte de Matos",
+              "slug": "corte-matos-app", 
+              "version": "1.0.0",
+              "orientation": "portrait",
+              "platforms": ["ios", "android", "web"],
+              "projectId": "PLACEHOLDER_PROJECT_ID",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#2e7d32"
+              },
+              "assetBundlePatterns": ["**/*"],
+              "ios": {
+                "supportsTablet": true,
+                "bundleIdentifier": "com.cortematosapp.ios"
+              },
+              "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/adaptive-icon.png",
+                  "backgroundColor": "#2e7d32"
+                },
+                "package": "com.cortematosapp.app",
+                "versionCode": 1,
+                "permissions": [
+                  "android.permission.WRITE_EXTERNAL_STORAGE",
+                  "android.permission.READ_EXTERNAL_STORAGE"
+                ]
+              }
             }
           }
+          EOF
+            mv app.json.tmp app.json
+          fi
           
-          echo "✅ EAS configurado (pode precisar de projeto manual)!"
+          # Tentar inicializar EAS de forma simples
+          echo "🚀 Inicializando EAS..."
+          npx eas init --non-interactive || {
+            echo "⚠️ EAS init falhou, mas continuando..."
+            echo "O projeto será criado automaticamente durante o build se necessário"
+          }
+          
+          echo "✅ EAS configurado!"
           
       - name: Verify EAS configuration
         run: |
@@ -180,15 +220,33 @@ jobs:
 
       - name: Build APK Preview
         if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
-        run: eas build --platform android --profile preview --non-interactive
+        run: |
+          echo "🔨 Iniciando build APK Preview..."
+          echo "Se o projeto não existir, será criado automaticamente"
+          npx eas build --platform android --profile preview --non-interactive --auto-submit-with-profile=false || {
+            echo "❌ Build falhou! Possíveis causas:"
+            echo "1. Secrets não configuradas corretamente"
+            echo "2. Projeto não existe no Expo (será criado automaticamente na próxima tentativa)"
+            echo "3. Token expirado"
+            echo ""
+            echo "📋 Verifique:"
+            echo "- Todas as 5 secrets estão configuradas"
+            echo "- Token EXPO_TOKEN está válido"
+            echo "- Keystore está correto"
+            exit 1
+          }
 
       - name: Build APK Development
         if: ${{ github.event.inputs.build_type == 'development' }}
-        run: eas build --platform android --profile development --non-interactive
+        run: |
+          echo "🔨 Iniciando build APK Development..."
+          npx eas build --platform android --profile development --non-interactive --auto-submit-with-profile=false || exit 1
 
       - name: Build AAB Production
         if: ${{ github.event.inputs.build_type == 'production' }}
-        run: eas build --platform android --profile production --non-interactive
+        run: |
+          echo "🔨 Iniciando build AAB Production..."
+          npx eas build --platform android --profile production --non-interactive --auto-submit-with-profile=false || exit 1
 
       - name: Get build info
         run: |

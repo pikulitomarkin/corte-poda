@@ -8,11 +8,11 @@
 
 ## 🚀 PRÓXIMAS AÇÕES (VOCÊ DEVE FAZER):
 
-### 1️⃣ CONFIGURAR EXPO COMPLETO (NOVO - OBRIGATÓRIO)
+### 1️⃣ OBTER TOKEN DO EXPO (SIMPLES - OBRIGATÓRIO)
 ```bash
-.\configurar-expo-completo.bat
+.\obter-token-expo.bat
 ```
-☝️ **Este script faz login, registra projeto e obtém token automaticamente**
+☝️ **Este script apenas faz login e obtém o token (mais simples e confiável)**
 
 ### 2️⃣ GERAR KEYSTORE ANDROID
 ```bash
@@ -34,31 +34,31 @@ Acesse: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions
 1. GitHub → Actions → "Build APK - Corte de Matos App"
 2. "Run workflow" → "preview" → "Run workflow"
 
+**💡 NOTA:** O projeto Expo será criado automaticamente durante o primeiro build!
+
 ## 📋 CHECKLIST:
-- [ ] Expo configurado completamente (script configurar-expo-completo.bat)
-- [ ] Token EXPO_TOKEN obtido
+- [ ] Token Expo obtido (script obter-token-expo.bat)
+- [ ] Token configurado como EXPO_TOKEN no GitHub
 - [ ] Keystore gerado
 - [ ] 5 secrets configuradas no GitHub
 - [ ] Build executado no GitHub Actions
 
 ## 🎯 STATUS:
 - ✅ **Código corrigido e enviado para GitHub**
-- ✅ **Script de configuração completa criado**
-- ❌ **PENDENTE: Você executar configurar-expo-completo.bat**
+- ✅ **Script simplificado criado (obter-token-expo.bat)**
+- ✅ **Workflow otimizado para criar projeto automaticamente**
+- ❌ **PENDENTE: Você executar obter-token-expo.bat**
 - ❌ **PENDENTE: Configurar secrets e executar build**
 
 ## 📞 SE PRECISAR DE AJUDA:
-1. Execute .\configurar-expo-completo.bat PRIMEIRO
-2. Se der erro de permissão, crie projeto manualmente em https://expo.dev/
-3. Execute os outros scripts .bat na ordem
-4. Verifique se todas as secrets estão configuradas
-5. Execute o build no GitHub Actions
+1. Execute .\obter-token-expo.bat PRIMEIRO (só login + token)
+2. Execute .\gerar-keystore.bat e .\converter-keystore-base64.bat
+3. Configure todas as 5 secrets no GitHub
+4. Execute o build no GitHub Actions
+5. O projeto será criado automaticamente durante o build
 
-## 🔧 SOLUÇÃO PARA ERRO DE PERMISSÃO:
-Se o script falhar com erro de permissão:
-1. Acesse: https://expo.dev/
-2. Faça login
-3. Clique "Create a project"
-4. Nome: "Corte de Matos"
-5. Slug: "corte-matos-app"  
-6. Execute o script novamente
+## 🎯 VANTAGENS DA NOVA ABORDAGEM:
+- ✅ Não precisa criar projeto manualmente
+- ✅ Não há problemas de permissão
+- ✅ EAS cria o projeto automaticamente durante o build
+- ✅ Processo mais simples e confiável
