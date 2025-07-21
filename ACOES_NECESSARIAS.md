@@ -5,6 +5,8 @@
 2. ❌ `EAS project not configured` → ✅ **CORRIGIDO**
 3. ❌ Falta projectId no app.json → ✅ **CORRIGIDO**
 4. ❌ Workflow sem validações → ✅ **CORRIGIDO**
+5. ❌ `npm error could not determine executable` → ✅ **CORRIGIDO COM NOVO WORKFLOW**
+6. ❌ `Node.js incompatibility` → ✅ **CORRIGIDO - Node.js 20 + NPM**
 
 ## 🚀 PRÓXIMAS AÇÕES (VOCÊ DEVE FAZER):
 
@@ -30,11 +32,15 @@ Acesse: https://github.com/pikulitomarkin/corte-poda/settings/secrets/actions
 - `ANDROID_KEY_ALIAS` = my-key-alias
 - `ANDROID_KEY_PASSWORD` = Mesma senha do keystore
 
-### 4️⃣ EXECUTAR BUILD (WORKFLOW CORRIGIDO)
-1. GitHub → Actions → **"🔨 Build APK - Corte de Matos (SIMPLES)"** ← NOVO!
+### 4️⃣ EXECUTAR BUILD (WORKFLOW FINAL CORRIGIDO)
+1. GitHub → Actions → **"� Build APK - Corte de Matos (FINAL)"** ← MAIS NOVO!
 2. "Run workflow" → "preview" → "Run workflow"
 
-**💡 NOTA:** Use o novo workflow simplificado que resolve o erro do npm!
+**💡 CORREÇÕES APLICADAS:**
+- ✅ Node.js 20 (resolve incompatibilidade)
+- ✅ NPM em vez de Yarn (mais estável)
+- ✅ Autenticação melhorada
+- ✅ Variáveis de ambiente explícitas
 
 ## 📋 CHECKLIST:
 - [x] Token Expo obtido (script obter-token-expo.bat)

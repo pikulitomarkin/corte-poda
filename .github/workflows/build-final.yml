@@ -1,4 +1,4 @@
-name: 🔨 Build APK - Corte de Matos (SIMPLES)
+name: 🚀 Build APK - Corte de Matos (FINAL)
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🟢 Setup Node.js
+      - name: 🟢 Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -29,16 +29,20 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          echo "📦 Instalando dependências..."
-          npm ci --legacy-peer-deps
+          echo "📦 Instalando dependências com Node 20..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
 
-      - name: 🔧 Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          expo-version: latest
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
+      - name: 🔧 Setup Expo CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest eas-cli@latest
+
+      - name: 🔐 Authenticate with Expo
+        run: |
+          echo "🔐 Autenticando com Expo..."
+          echo "${{ secrets.EXPO_TOKEN }}" | npx expo login --username stdin --password-stdin 2>/dev/null || echo "Token será usado diretamente"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: 🔍 Verify all secrets
         run: |
@@ -46,7 +50,6 @@ jobs:
           
           if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
             echo "❌ ERRO: EXPO_TOKEN não configurado!"
-            echo "Configure em: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
           
@@ -107,11 +110,17 @@ jobs:
           echo "🔨 Iniciando build do APK..."
           echo "📱 Profile: ${{ github.event.inputs.profile }}"
           
+          # Configurar ambiente
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
           # Build com EAS
-          eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: ✅ Build completed
         run: |
           echo "🎉 Build concluído com sucesso!"
           echo "📱 APK gerado para o profile: ${{ github.event.inputs.profile }}"
           echo "🔗 Baixe o APK no painel do EAS Build"
+          echo "🌐 Acesse: https://expo.dev/accounts/$(npx expo whoami)/projects/corte-matos-app/builds"
