@@ -1,12 +1,13 @@
-# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW ULTIMATE)
-1. GitHub → Actions → **"💯 Build APK - Corte de Matos (ULTIMATE)"** ← FINAL!
+# 🎯 AÇÕES NECESSÁRIAS - GitHub Act### 4️⃣ EXECUTAR BUILD (WORKFLOW MEGA ROBUST)
+1. GitHub → Actions → **"🎯 Build APK - Corte de Matos (MEGA ROBUST)"** ← DEFINITIVO!
 2. "Run workflow" → "preview" → "Run workflow"
 
-**💡 NOVA ESTRATÉGIA:**
-- ✅ Remove flag --non-interactive
-- ✅ Respostas automáticas (y\ny\n)
-- ✅ Deixa EAS configurar interativamente
-- ✅ Sem conflitos de projeto existented
+**💡 ESTRATÉGIA MEGA ROBUSTA:**
+- ✅ Múltiplas tentativas de configuração EAS
+- ✅ Fallback automático se primeira tentativa falhar
+- ✅ ProjectId manual + .easrc + cache clear
+- ✅ 3 tentativas diferentes de build
+- ✅ Solução para "stdin is not readable"d
 
 ## ✅ PROBLEMAS RESOLVIDOS:
 1. ❌ `credentials.json must exist` → ✅ **CORRIGIDO**

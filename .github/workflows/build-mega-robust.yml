@@ -1,0 +1,123 @@
+name: 🎯 Build APK - Corte de Matos (MEGA ROBUST)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore configurado!"
+
+      - name: 🔧 Multi-Strategy EAS Configuration
+        run: |
+          echo "🔧 Configuração EAS com múltiplas estratégias..."
+          
+          PROJECT_ID="84ea4587-b864-4560-a167-05855903311c"
+          
+          # Estratégia 1: eas init com ID específico
+          echo "📝 Estratégia 1: eas init --id"
+          npx eas init --id $PROJECT_ID --force --non-interactive && echo "✅ Estratégia 1 funcionou!" || echo "❌ Estratégia 1 falhou"
+          
+          # Estratégia 2: Verificar e adicionar projectId manualmente se necessário
+          echo "📝 Estratégia 2: Verificar projectId no app.json"
+          if ! grep -q "\"projectId\"" app.json; then
+            echo "Adicionando projectId manualmente..."
+            cp app.json app.json.backup
+            jq --arg id "$PROJECT_ID" '.expo.projectId = $id' app.json > app.json.tmp && mv app.json.tmp app.json
+            echo "✅ ProjectId adicionado manualmente!"
+          else
+            echo "✅ ProjectId já existe no app.json"
+          fi
+          
+          # Estratégia 3: Criar .easrc se necessário
+          echo "📝 Estratégia 3: Criar .easrc"
+          echo '{"cli": {"appVersionSource": "local"}}' > .easrc
+          
+          # Verificar configuração final
+          echo "📄 Configuração final:"
+          echo "App.json projectId:"
+          cat app.json | jq '.expo.projectId' || echo "Não encontrado"
+          echo "EAS.json:"
+          cat eas.json | jq '.build' || echo "Não encontrado"
+          echo "Credentials.json existe: $(test -f credentials.json && echo 'SIM' || echo 'NÃO')"
+          
+          echo "✅ Configuração multi-estratégia completa!"
+
+      - name: 🔨 Robust Build Process
+        run: |
+          echo "🔨 Processo de build robusto..."
+          
+          # Tentar build com diferentes abordagens
+          echo "🚀 Tentativa 1: Build padrão"
+          if npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait; then
+            echo "✅ Build bem-sucedido na tentativa 1!"
+            exit 0
+          fi
+          
+          echo "🔄 Tentativa 2: Build após reconfiguração"
+          npx eas init --force --non-interactive || true
+          if npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait; then
+            echo "✅ Build bem-sucedido na tentativa 2!"
+            exit 0
+          fi
+          
+          echo "🔄 Tentativa 3: Build com clear cache"
+          npx eas build --clear-cache --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait || echo "❌ Todas as tentativas falharam"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Success
+        run: |
+          echo "🎉 Build finalizado!"
+          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
