@@ -1,0 +1,44 @@
+name: 🔍 Debug EAS Build - Verificar Conta
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    name: 🔍 Debug Conta Expo
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔍 Debug informações
+        run: |
+          echo "🔍 INFORMAÇÕES DE DEBUG:"
+          echo ""
+          echo "👤 Usuário Expo logado:"
+          npx expo whoami || echo "Não conseguiu verificar usuário"
+          echo ""
+          echo "📱 Informações do projeto:"
+          cat app.json | jq '.expo | {name, slug, projectId}' || echo "Erro ao ler app.json"
+          echo ""
+          echo "🏢 Organizações disponíveis:"
+          npx expo org:list || echo "Não conseguiu listar organizações"
+          echo ""
+          echo "📋 Projetos do usuário:"
+          npx expo project:list || echo "Não conseguiu listar projetos"
+          echo ""
+          echo "🔗 LINKS PARA VERIFICAR:"
+          echo "- Painel principal: https://expo.dev/"
+          echo "- Seus projetos: https://expo.dev/accounts/$(npx expo whoami)/projects"
+          echo "- Projeto específico: https://expo.dev/accounts/$(npx expo whoami)/projects/corte-matos-app"
+          echo "- Builds: https://expo.dev/accounts/$(npx expo whoami)/projects/corte-matos-app/builds"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

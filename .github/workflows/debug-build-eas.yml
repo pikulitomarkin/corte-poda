@@ -1,0 +1,64 @@
+name: 🔍 Verificar Build EAS - Debug Completo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    name: 🔍 Debug Build EAS
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔍 Debug informações completas
+        run: |
+          echo "🔍 === DEBUG BUILD EAS ==="
+          echo ""
+          echo "👤 1. USUÁRIO LOGADO:"
+          npx expo whoami || echo "❌ Erro ao verificar usuário"
+          echo ""
+          echo "📱 2. PROJETO ATUAL:"
+          cat app.json | jq '.expo | {name, slug, projectId}' || echo "❌ Erro ao ler app.json"
+          echo ""
+          echo "📋 3. LISTANDO BUILDS RECENTES:"
+          npx eas build:list --limit=10 || echo "❌ Erro ao listar builds"
+          echo ""
+          echo "🏢 4. ORGANIZAÇÕES:"
+          npx expo org:list || echo "❌ Sem organizações"
+          echo ""
+          echo "📂 5. PROJETOS DISPONÍVEIS:"
+          npx expo project:list || echo "❌ Erro ao listar projetos"
+          echo ""
+          echo "🔧 6. STATUS DO PROJETO EAS:"
+          npx eas project:info || echo "❌ Projeto não configurado"
+          echo ""
+          echo "🔗 7. LINKS PARA VERIFICAR:"
+          USER=$(npx expo whoami)
+          echo "- Painel principal: https://expo.dev/"
+          echo "- Seus projetos: https://expo.dev/accounts/$USER/projects"
+          echo "- Projeto corte-matos: https://expo.dev/accounts/$USER/projects/corte-matos-app"
+          echo "- Builds: https://expo.dev/accounts/$USER/projects/corte-matos-app/builds"
+          echo ""
+          echo "✅ Debug concluído!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
