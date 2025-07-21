@@ -4,7 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       profile:
-        description: 'Build profile'
+          - name: 🔨 Build APK with EAS
+        run: |
+          echo "🔨 Iniciando build do APK..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Configurar ambiente
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          # Configurar projeto EAS com ID específico primeiro
+          echo "🔧 Configurando projeto EAS com ID específico..."
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive || echo "Continuando..."
+          
+          # Verificar se foi configurado
+          echo "📄 Verificando configuração:"
+          cat app.json | grep -A5 -B5 projectId || echo "ProjectId não encontrado"
+          
+          # Build com EAS
+          echo "🚀 Executando build..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --waitild profile'
         required: true
         default: 'preview'
         type: choice
@@ -113,13 +131,18 @@ jobs:
           # Configurar ambiente
           export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
           
-          # Inicializar projeto EAS se necessário
-          echo "🔧 Inicializando projeto EAS..."
-          npx eas init --non-interactive || echo "Projeto já existe ou será criado durante o build"
+          # Configurar projeto EAS existente automaticamente
+          echo "🔧 Configurando projeto EAS existente..."
           
-          # Build com EAS
-          echo "🚀 Executando build..."
-          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          # Usar yes para responder automaticamente
+          echo "🚀 Executando build com configuração automática..."
+          yes | npx eas build --platform android --profile ${{ github.event.inputs.profile }} --wait || true
+          
+          # Se o yes não funcionar, tentar com timeout
+          if [ $? -ne 0 ]; then
+            echo "� Tentativa alternativa com timeout..."
+            timeout 300 bash -c 'echo "y" | npx eas build --platform android --profile ${{ github.event.inputs.profile }} --wait'
+          fi
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
