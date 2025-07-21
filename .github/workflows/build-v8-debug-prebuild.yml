@@ -1,0 +1,271 @@
+name: 🎯 Build APK - DEBUG PREBUILD V8
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK - DEBUG V8
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências com Node 20..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest
+          npm install -g eas-cli@latest
+          echo "✅ CLIs instalados:"
+          npx expo --version
+          npx eas --version
+
+      - name: 🔍 Debug project structure
+        run: |
+          echo "🔍 Analisando estrutura do projeto..."
+          echo "📂 Conteúdo do diretório:"
+          ls -la
+          
+          echo "📱 App.json:"
+          cat app.json
+          
+          echo "📋 Package.json:"
+          cat package.json | grep -A5 -B5 "expo\|react-native"
+          
+          echo "🔧 EAS.json (se existir):"
+          if [ -f "eas.json" ]; then
+            cat eas.json
+          else
+            echo "❌ eas.json não encontrado"
+          fi
+
+      - name: 🔍 Verify all secrets
+        run: |
+          echo "🔍 Verificando secrets obrigatórias..."
+          
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: EXPO_TOKEN não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_ALIAS não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          echo "✅ Todas as 5 secrets configuradas corretamente!"
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore Android..."
+          
+          # Verificar diretório atual
+          echo "📂 Diretório atual: $(pwd)"
+          
+          # Criar keystore a partir do base64
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Verificar se foi criado
+          if [ ! -f "my-release-key.jks" ]; then
+            echo "❌ ERRO: Falha ao criar keystore!"
+            exit 1
+          fi
+          
+          echo "✅ Keystore criado com sucesso!"
+          ls -la my-release-key.jks
+
+      - name: 🔧 Create credentials.json PYTHON
+        run: |
+          echo "🔧 Criando credentials.json com Python..."
+          
+          # Usar Python para criar JSON seguramente
+          python3 << 'PYTHON_SCRIPT'
+          import json
+          import os
+          
+          # Obter secrets das variáveis de ambiente
+          keystore_password = os.environ.get('ANDROID_KEYSTORE_PASSWORD', '')
+          key_alias = os.environ.get('ANDROID_KEY_ALIAS', '')
+          key_password = os.environ.get('ANDROID_KEY_PASSWORD', '')
+          
+          # Criar estrutura do credentials.json
+          credentials = {
+              "android": {
+                  "keystore": {
+                      "keystorePath": "./my-release-key.jks",
+                      "keystorePassword": keystore_password,
+                      "keyAlias": key_alias,
+                      "keyPassword": key_password
+                  }
+              }
+          }
+          
+          # Salvar arquivo JSON
+          with open('credentials.json', 'w') as f:
+              json.dump(credentials, f, indent=2)
+          
+          print("✅ credentials.json criado com Python!")
+          PYTHON_SCRIPT
+          
+          echo "📄 Verificando arquivo:"
+          ls -la credentials.json
+          
+          echo "📋 Validando JSON:"
+          if command -v jq &> /dev/null; then
+            # Validar JSON sem mostrar senhas
+            if jq empty credentials.json 2>/dev/null; then
+              echo "✅ JSON válido!"
+              echo "📋 Estrutura (sem senhas):"
+              jq 'del(.android.keystore.keystorePassword, .android.keystore.keyPassword)' credentials.json
+            else
+              echo "❌ JSON inválido!"
+              exit 1
+            fi
+          else
+            echo "✅ Arquivo criado (jq não disponível)"
+          fi
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 🔧 Create eas.json if missing
+        run: |
+          echo "🔧 Verificando/Criando eas.json..."
+          
+          if [ ! -f "eas.json" ]; then
+            echo "📋 Criando eas.json padrão..."
+            cat > eas.json << 'EAS_JSON'
+          {
+            "cli": {
+              "version": ">= 5.8.0"
+            },
+            "build": {
+              "development": {
+                "developmentClient": true,
+                "distribution": "internal"
+              },
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle"
+                }
+              }
+            },
+            "submit": {
+              "production": {}
+            }
+          }
+          EAS_JSON
+            echo "✅ eas.json criado!"
+          else
+            echo "✅ eas.json já existe"
+          fi
+          
+          echo "📋 Conteúdo do eas.json:"
+          cat eas.json
+
+      - name: 🔧 Initialize EAS Project
+        run: |
+          echo "🔧 Inicializando projeto EAS..."
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          # Verificar quem está logado
+          echo "👤 Verificando usuário autenticado:"
+          npx expo whoami || echo "Autenticação via token"
+          
+          # Inicializar projeto EAS com ID específico
+          echo "📋 Configurando projeto EAS com ID: 84ea4587-b864-4560-a167-05855903311c"
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+          
+          # Verificar configuração
+          echo "📄 Verificando configuração do projeto:"
+          npx eas project:info
+          
+          echo "✅ EAS project inicializado com sucesso!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build APK with VERBOSE LOGS
+        run: |
+          echo "🔨 Iniciando build do APK com logs detalhados..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Configurar ambiente
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          export EAS_LOG_LEVEL="debug"
+          
+          # Verificações finais antes do build
+          echo "🔍 Verificações finais:"
+          echo "📂 Diretório: $(pwd)"
+          echo "📋 Arquivos:"
+          ls -la | grep -E "(credentials\.json|my-release-key\.jks|app\.json|eas\.json)"
+          
+          echo "📄 Projeto EAS:"
+          npx eas project:info
+          
+          echo "📱 App.json projectId:"
+          cat app.json | grep -A2 -B2 projectId
+          
+          # Executar build com logs verbosos
+          echo "🚀 Executando build com logs detalhados..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait --verbose
+          
+          echo "🎉 Build submetido com sucesso!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Build completed or failed
+        if: always()
+        run: |
+          echo "📋 Status final do build:"
+          
+          # Mostrar últimos builds (mesmo se falharam)
+          echo "📱 Últimos builds:"
+          npx eas build:list --platform android --limit 5 || echo "Não foi possível listar builds"
+          
+          echo "🔗 Acesse para ver detalhes:"
+          echo "🌐 EAS Dashboard: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
