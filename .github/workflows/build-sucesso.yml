@@ -1,4 +1,4 @@
-name: 🎯 Build APK - Corte de Matos (DEFINITIVO)
+name: ✅ Build APK - Corte de Matos (SUCESSO)
 
 on:
   workflow_dispatch:
@@ -29,21 +29,16 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          echo "📦 Instalando dependências com Node 20..."
+          echo "📦 Instalando dependências..."
           npm ci --legacy-peer-deps --no-audit --no-fund
 
-      - name: 🔧 Setup Expo CLI
-        run: |
-          echo "🔧 Instalando Expo CLI e EAS CLI..."
-          npm install -g @expo/cli@latest eas-cli@latest
-
-      - name: 🔐 Authenticate with Expo
-        run: |
-          echo "🔐 Autenticando com Expo..."
-          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
-          echo "Token configurado para autenticação"
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: 🔧 Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
 
       - name: 🔍 Verify all secrets
         run: |
@@ -74,7 +69,7 @@ jobs:
             exit 1
           fi
           
-          echo "✅ Todas as 5 secrets configuradas corretamente!"
+          echo "✅ Todas as 5 secrets configuradas!"
 
       - name: 🔑 Setup Android keystore
         run: |
@@ -103,55 +98,38 @@ jobs:
           }
           EOF
           
-          echo "✅ Keystore e credentials.json configurados!"
+          echo "✅ Keystore e credentials.json criados!"
           ls -la my-release-key.jks
 
-      - name: 🔧 Initialize EAS Project
+      - name: 📱 Verify project configuration
         run: |
-          echo "🔧 Inicializando projeto EAS..."
-          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          echo "📱 Verificando configuração do projeto..."
           
-          # Verificar se já está autenticado
-          echo "🔐 Verificando autenticação..."
-          npx expo whoami || echo "Usando token de ambiente"
+          # Verificar autenticação
+          echo "🔐 Usuário logado: $(npx expo whoami)"
           
-          # Forçar inicialização do projeto existente
-          echo "📝 Configurando projeto EAS existente..."
-          npx eas init --force --non-interactive || echo "Continuando com configuração manual"
+          # Verificar app.json
+          echo "📄 Conteúdo do app.json:"
+          cat app.json | jq '.expo | {name, slug, projectId}'
           
-          # Se ainda não funcionar, criar ID manualmente no app.json
-          echo "📝 Verificando projectId no app.json..."
-          if ! grep -q '"projectId"' app.json; then
-            echo "Adicionando projectId ao app.json..."
-            # Backup do app.json
-            cp app.json app.json.backup
-            
-            # Adicionar projectId usando jq ou sed
-            sed -i 's/"expo": {/"expo": {\n    "projectId": "84ea4587-b864-4560-a167-05855903311c",/' app.json
-            
-            echo "✅ ProjectId adicionado ao app.json"
-          fi
+          # Verificar eas.json
+          echo "📄 Conteúdo do eas.json:"
+          cat eas.json | jq '.build'
           
-          # Verificar arquivos de configuração
-          echo "📄 Verificando configurações..."
-          ls -la app.json eas.json credentials.json
-          cat app.json | head -10
+          # Verificar credentials.json
+          echo "📄 Credentials.json existe: $(test -f credentials.json && echo 'SIM' || echo 'NÃO')"
           
-          echo "✅ Projeto EAS configurado!"
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          echo "✅ Configuração verificada!"
 
       - name: 🔨 Build APK with EAS
         run: |
           echo "🔨 Iniciando build do APK..."
           echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          echo "🎯 Projeto: @pikulito/corte-matos-app"
           
-          # Configurar ambiente
-          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
-          
-          # Build com EAS (vai criar projeto se não existir)
+          # Build direto com EAS (projeto já existe)
           echo "🚀 Executando build EAS..."
-          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -160,4 +138,4 @@ jobs:
           echo "🎉 Build concluído com sucesso!"
           echo "📱 APK gerado para o profile: ${{ github.event.inputs.profile }}"
           echo "🔗 Baixe o APK no painel do EAS Build"
-          echo "🌐 Acesse: https://expo.dev/accounts/$(npx expo whoami)/projects/corte-matos-app/builds"
+          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
