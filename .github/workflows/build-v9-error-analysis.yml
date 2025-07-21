@@ -1,0 +1,282 @@
+name: 🎯 Build APK - ERROR ANALYSIS V9
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK - ERROR ANALYSIS V9
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências com Node 20..."
+          npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: 🔧 Setup Expo and EAS CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest
+          npm install -g eas-cli@latest
+          echo "✅ CLIs instalados:"
+          npx expo --version
+          npx eas --version
+
+      - name: 🔍 Fix app.json configuration
+        run: |
+          echo "🔍 Analisando e corrigindo app.json..."
+          
+          echo "📱 App.json atual:"
+          cat app.json
+          
+          # Criar backup
+          cp app.json app.json.backup
+          
+          # Verificar se tem configuração correta para Expo SDK 49
+          echo "🔧 Verificando configuração SDK..."
+          
+          # Criar app.json otimizado para EAS Build
+          cat > app.json << 'APP_JSON_EOF'
+          {
+            "expo": {
+              "name": "Corte de Matos",
+              "slug": "corte-matos-app",
+              "version": "1.0.0",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#ffffff"
+              },
+              "assetBundlePatterns": [
+                "**/*"
+              ],
+              "ios": {
+                "supportsTablet": true
+              },
+              "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/adaptive-icon.png",
+                  "backgroundColor": "#ffffff"
+                },
+                "package": "com.pikulito.cortematos",
+                "versionCode": 1,
+                "permissions": [
+                  "android.permission.READ_EXTERNAL_STORAGE",
+                  "android.permission.WRITE_EXTERNAL_STORAGE"
+                ]
+              },
+              "web": {
+                "favicon": "./assets/favicon.png"
+              },
+              "platforms": [
+                "ios",
+                "android",
+                "web"
+              ],
+              "projectId": "84ea4587-b864-4560-a167-05855903311c",
+              "extra": {
+                "eas": {
+                  "projectId": "84ea4587-b864-4560-a167-05855903311c"
+                }
+              },
+              "owner": "pikulito"
+            }
+          }
+          APP_JSON_EOF
+          
+          echo "✅ App.json otimizado criado!"
+          echo "📋 Nova configuração:"
+          cat app.json
+
+      - name: 🔍 Verify all secrets
+        run: |
+          echo "🔍 Verificando secrets obrigatórias..."
+          
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "❌ ERRO: EXPO_TOKEN não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEYSTORE_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_ALIAS não configurado!"
+            exit 1
+          fi
+          
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "❌ ERRO: ANDROID_KEY_PASSWORD não configurado!"
+            exit 1
+          fi
+          
+          echo "✅ Todas as 5 secrets configuradas corretamente!"
+
+      - name: 🔑 Setup Android keystore
+        run: |
+          echo "🔑 Configurando keystore Android..."
+          
+          # Criar keystore a partir do base64
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Verificar se foi criado
+          if [ ! -f "my-release-key.jks" ]; then
+            echo "❌ ERRO: Falha ao criar keystore!"
+            exit 1
+          fi
+          
+          echo "✅ Keystore criado com sucesso!"
+          ls -la my-release-key.jks
+
+      - name: 🔧 Create credentials.json PYTHON
+        run: |
+          echo "🔧 Criando credentials.json com Python..."
+          
+          python3 << 'PYTHON_SCRIPT'
+          import json
+          import os
+          
+          keystore_password = os.environ.get('ANDROID_KEYSTORE_PASSWORD', '')
+          key_alias = os.environ.get('ANDROID_KEY_ALIAS', '')
+          key_password = os.environ.get('ANDROID_KEY_PASSWORD', '')
+          
+          credentials = {
+              "android": {
+                  "keystore": {
+                      "keystorePath": "./my-release-key.jks",
+                      "keystorePassword": keystore_password,
+                      "keyAlias": key_alias,
+                      "keyPassword": key_password
+                  }
+              }
+          }
+          
+          with open('credentials.json', 'w') as f:
+              json.dump(credentials, f, indent=2)
+          
+          print("✅ credentials.json criado com Python!")
+          PYTHON_SCRIPT
+          
+          echo "✅ Arquivo criado!"
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 🔧 Create optimized eas.json
+        run: |
+          echo "🔧 Criando eas.json otimizado..."
+          
+          cat > eas.json << 'EAS_JSON_EOF'
+          {
+            "cli": {
+              "version": ">= 5.8.0"
+            },
+            "build": {
+              "development": {
+                "developmentClient": true,
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk"
+                }
+              },
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle"
+                }
+              }
+            },
+            "submit": {
+              "production": {}
+            }
+          }
+          EAS_JSON_EOF
+          
+          echo "✅ eas.json otimizado criado!"
+          echo "📋 Configuração:"
+          cat eas.json
+
+      - name: 🔧 Initialize EAS Project
+        run: |
+          echo "🔧 Inicializando projeto EAS..."
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          echo "👤 Usuário:"
+          npx expo whoami || echo "Token auth"
+          
+          echo "📋 Configurando projeto:"
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+          
+          echo "📄 Info do projeto:"
+          npx eas project:info
+          
+          echo "✅ EAS inicializado!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build APK FIXED
+        run: |
+          echo "🔨 Iniciando build APK..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          echo "🔍 Verificações finais:"
+          ls -la | grep -E "(credentials\.json|my-release-key\.jks|app\.json|eas\.json)"
+          
+          echo "🚀 Executando build (SEM --verbose)..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          
+          echo "🎉 Build finalizado!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Show build results
+        if: always()
+        run: |
+          echo "📋 Resultados do build:"
+          
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          echo "📱 Últimos builds:"
+          npx eas build:list --platform android --limit 3 --non-interactive
+          
+          echo "🔗 Links úteis:"
+          echo "🌐 EAS Dashboard: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo "📝 Para ver logs detalhados, acesse o link do build específico"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
