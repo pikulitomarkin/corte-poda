@@ -119,5 +119,21 @@ jobs:
 
       - name: ✅ Success
         run: |
-          echo "🎉 Build finalizado!"
-          echo "🌐 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo "🎉 Build finalizado com sucesso!"
+          echo ""
+          echo "📱 COMO BAIXAR O APK:"
+          echo "1. Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo "2. Procure pelo build mais recente (hoje: $(date))"
+          echo "3. Clique no botão 'Download' ao lado do APK"
+          echo ""
+          echo "📋 INFORMAÇÕES DO BUILD:"
+          echo "- Profile: ${{ github.event.inputs.profile }}"
+          echo "- Plataforma: Android"
+          echo "- Tipo: APK"
+          echo "- Data: $(date)"
+          echo ""
+          echo "🔗 LINKS DIRETOS:"
+          echo "- Painel EAS: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo "- Projeto Expo: https://expo.dev/accounts/pikulito/projects/corte-matos-app"
+          echo ""
+          echo "✅ APK pronto para download no painel EAS Build!"
