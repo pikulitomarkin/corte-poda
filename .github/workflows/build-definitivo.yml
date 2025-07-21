@@ -1,4 +1,4 @@
-name: 🚀 Build APK - Corte de Matos (FINAL)
+name: 🎯 Build APK - Corte de Matos (DEFINITIVO)
 
 on:
   workflow_dispatch:
@@ -40,7 +40,8 @@ jobs:
       - name: 🔐 Authenticate with Expo
         run: |
           echo "🔐 Autenticando com Expo..."
-          echo "${{ secrets.EXPO_TOKEN }}" | npx expo login --username stdin --password-stdin 2>/dev/null || echo "Token será usado diretamente"
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          echo "Token configurado para autenticação"
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -105,6 +106,27 @@ jobs:
           echo "✅ Keystore e credentials.json configurados!"
           ls -la my-release-key.jks
 
+      - name: 🔧 Initialize EAS Project
+        run: |
+          echo "🔧 Inicializando projeto EAS..."
+          export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
+          
+          # Verificar se já está autenticado
+          echo "🔐 Verificando autenticação..."
+          npx expo whoami || echo "Usando token de ambiente"
+          
+          # Tentar inicializar projeto
+          echo "📝 Inicializando projeto EAS..."
+          npx eas init --non-interactive || echo "Projeto será criado durante o build"
+          
+          # Verificar arquivos de configuração
+          echo "📄 Verificando configurações..."
+          ls -la app.json eas.json credentials.json
+          
+          echo "✅ Projeto EAS preparado!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: 🔨 Build APK with EAS
         run: |
           echo "🔨 Iniciando build do APK..."
@@ -113,12 +135,8 @@ jobs:
           # Configurar ambiente
           export EXPO_TOKEN="${{ secrets.EXPO_TOKEN }}"
           
-          # Inicializar projeto EAS se necessário
-          echo "🔧 Inicializando projeto EAS..."
-          npx eas init --non-interactive || echo "Projeto já existe ou será criado durante o build"
-          
-          # Build com EAS
-          echo "🚀 Executando build..."
+          # Build com EAS (vai criar projeto se não existir)
+          echo "🚀 Executando build EAS..."
           npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
