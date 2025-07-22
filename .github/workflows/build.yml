@@ -33,21 +33,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Force NPM only and remove Yarn
-        run: |
-          rm -f yarn.lock
-          rm -f package-lock.json
-          npm config set fund false
-          npm config set audit false
-
-      - name: Clear all caches
-        run: |
-          npm cache clean --force
-          rm -rf node_modules
-          rm -rf ~/.npm
-          rm -rf ~/.cache
-
-      - name: Install dependencies with NPM
+      - name: Install dependencies
         run: npm install --legacy-peer-deps
 
       - name: Setup Expo and EAS
@@ -57,20 +43,5 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build APK Preview
-        if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
+      - name: Build APK
         run: eas build --platform android --profile preview --non-interactive
-
-      - name: Build APK Development
-        if: ${{ github.event.inputs.build_type == 'development' }}
-        run: eas build --platform android --profile development --non-interactive
-
-      - name: Build AAB Production
-        if: ${{ github.event.inputs.build_type == 'production' }}
-        run: eas build --platform android --profile production --non-interactive
-
-      - name: Get build info
-        run: |
-          echo "Build completed successfully!"
-          echo "Check your Expo dashboard for download link"
-          echo "Build type: ${{ github.event.inputs.build_type || 'preview' }}"
