@@ -4,9 +4,6 @@ on:
   push:
     branches: 
       - main
-  pull_request:
-    branches: 
-      - main
   workflow_dispatch:
     inputs:
       build_type:
@@ -32,13 +29,36 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+
+      - name: Clear npm cache
+        run: npm cache clean --force
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK Preview
+        if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
+        run: eas build --platform android --profile preview --non-interactive
+
+      - name: Build APK Development  
+        if: ${{ github.event.inputs.build_type == 'development' }}
+        run: eas build --platform android --profile development --non-interactive
+
+      - name: Build AAB Production
+        if: ${{ github.event.inputs.build_type == 'production' }}
+        run: eas build --platform android --profile production --non-interactive
+
+      - name: Get build info
+        run: |
+          echo "Build completed successfully!"
+          echo "Check your Expo dashboard for download link"
         with:
           expo-version: latest
           eas-version: latest
