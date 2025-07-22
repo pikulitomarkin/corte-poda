@@ -23,6 +23,7 @@ jobs:
     
     env:
       YARN_ENABLE: "0"
+      npm_config_package_manager: npm
       
     steps:
       - name: Checkout code
@@ -32,9 +33,28 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install --legacy-peer-deps
+      - name: Force NPM and disable Yarn completely
+        run: |
+          rm -f yarn.lock
+          rm -f package-lock.json
+          which yarn && sudo rm $(which yarn) || echo "Yarn not found"
+          npm config set fund false
+          npm config set audit false
+          npm config set package-manager npm
+
+      - name: Clear all caches aggressively
+        run: |
+          npm cache clean --force
+          rm -rf node_modules
+          rm -rf ~/.npm
+          rm -rf ~/.cache
+          rm -rf ~/.yarn
+          rm -rf /usr/local/lib/node_modules/yarn || echo "Global yarn not found"
+
+      - name: Install dependencies with NPM only
+        run: npm install --force --no-fund --no-audit
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
@@ -43,5 +63,20 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build APK
+      - name: Build APK Preview
+        if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
         run: eas build --platform android --profile preview --non-interactive
+
+      - name: Build APK Development
+        if: ${{ github.event.inputs.build_type == 'development' }}
+        run: eas build --platform android --profile development --non-interactive
+
+      - name: Build AAB Production
+        if: ${{ github.event.inputs.build_type == 'production' }}
+        run: eas build --platform android --profile production --non-interactive
+
+      - name: Get build info
+        run: |
+          echo "Build completed successfully!"
+          echo "Check your Expo dashboard for download link"
+          echo "Build type: ${{ github.event.inputs.build_type || 'preview' }}"
