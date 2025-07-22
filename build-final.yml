@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Force NPM usage and clear conflicts
+      - name: Disable Yarn completely
         run: |
           rm -f yarn.lock
           rm -f package-lock.json
@@ -44,7 +44,7 @@ jobs:
           rm -rf ~/.npm
           rm -rf ~/.cache
 
-      - name: Install dependencies with NPM
+      - name: Install with NPM only
         run: npm install --force
 
       - name: Setup Expo and EAS
@@ -70,4 +70,3 @@ jobs:
         run: |
           echo "Build completed successfully!"
           echo "Check your Expo dashboard for download link"
-          echo "Build type: ${{ github.event.inputs.build_type || 'preview' }}"
