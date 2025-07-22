@@ -30,10 +30,9 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE"
       ]
-    },
-    "extra": {
+    },    "extra": {
       "eas": {
-        "projectId": "corte-matos-app-2024"
+        "projectId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
       }
     }
   }
