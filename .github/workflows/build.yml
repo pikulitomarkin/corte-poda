@@ -61,15 +61,28 @@ jobs:
         run: |
           echo "Setting up Android credentials..."
           if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android-keystore.jks
-            echo "EXPO_ANDROID_KEYSTORE_PATH=./android-keystore.jks" >> $GITHUB_ENV
-            echo "EXPO_ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-            echo "EXPO_ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
-            echo "EXPO_ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
-            echo "✅ Android keystore configured successfully"
-            ls -la android-keystore.jks
+            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+            
+            # Create credentials.json with actual values
+            cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "${{ secrets.ANDROID_KEY_ALIAS }}",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+            
+            echo "✅ Android keystore and credentials configured successfully"
+            ls -la my-release-key.jks
+            echo "Credentials file created with secrets"
           else
-            echo "⚠️ No Android keystore configured - using Expo managed credentials"
+            echo "⚠️ No Android keystore configured - build will fail"
+            exit 1
           fi
 
       - name: Initialize EAS project
