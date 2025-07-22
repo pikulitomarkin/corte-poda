@@ -20,6 +20,7 @@ build/
 *.keystore
 my-release-key.jks
 keystore-base64.txt
+credentials.json
 
 # Cache
 .cache/
