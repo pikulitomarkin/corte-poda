@@ -1,4 +1,4 @@
-name: Build APK - Corte de Matos App
+﻿name: Build APK - Corte de Matos App
 
 on:
   push:
@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "Tipo de build"
+        description: 'Tipo de build'
         required: true
-        default: "preview"
+        default: 'preview'
         type: choice
         options:
           - preview
@@ -22,8 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      YARN_ENABLE: "0"
-      npm_config_package_manager: npm
+      YARN_ENABLE: '0'
       
     steps:
       - name: Checkout code
@@ -32,51 +31,44 @@ jobs:
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: 'npm'
+          node-version: '20'
 
-      - name: Force NPM and disable Yarn completely
+      - name: Force NPM only and remove Yarn
         run: |
           rm -f yarn.lock
           rm -f package-lock.json
-          which yarn && sudo rm $(which yarn) || echo "Yarn not found"
           npm config set fund false
           npm config set audit false
-          npm config set package-manager npm
 
-      - name: Clear all caches aggressively
+      - name: Clear all caches
         run: |
           npm cache clean --force
           rm -rf node_modules
           rm -rf ~/.npm
           rm -rf ~/.cache
-          rm -rf ~/.yarn
-          rm -rf /usr/local/lib/node_modules/yarn || echo "Global yarn not found"
 
-      - name: Install dependencies with NPM only
-        run: npm install --force --no-fund --no-audit
+      - name: Install dependencies with NPM
+        run: npm install --legacy-peer-deps
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
         with:
           expo-version: latest
           eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+          token: -Force{{ secrets.EXPO_TOKEN }}
+
+      - name: Initialize EAS project
+        run: |
+          echo 'Initializing EAS project...'
+          eas init --non-interactive || echo 'EAS init may have failed, continuing...'
+          
+      - name: Verify EAS configuration
+        run: |
+          echo 'Checking app.json for projectId...'
+          cat app.json
+          echo 'Checking eas.json...'
+          cat eas.json
 
       - name: Build APK Preview
-        if: ${{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
+        if: -Force{{ github.event.inputs.build_type == 'preview' || github.event.inputs.build_type == '' }}
         run: eas build --platform android --profile preview --non-interactive
-
-      - name: Build APK Development
-        if: ${{ github.event.inputs.build_type == 'development' }}
-        run: eas build --platform android --profile development --non-interactive
-
-      - name: Build AAB Production
-        if: ${{ github.event.inputs.build_type == 'production' }}
-        run: eas build --platform android --profile production --non-interactive
-
-      - name: Get build info
-        run: |
-          echo "Build completed successfully!"
-          echo "Check your Expo dashboard for download link"
-          echo "Build type: ${{ github.event.inputs.build_type || 'preview' }}"
