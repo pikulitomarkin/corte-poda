@@ -145,14 +145,28 @@ npm install
 - [x] Scripts de automação
 
 ### 🔄 Próximos passos
-- [ ] Executar primeiro build
+- [ ] **Opção A**: Build Local (requer rede sem restrições)
+  - [ ] Executar primeiro build local
+- [ ] **Opção B**: Build Online (recomendado) 
+  - [ ] Configurar GitHub Actions (arquivo já criado)
+  - [ ] Configurar token EXPO_TOKEN no GitHub
+  - [ ] Fazer push para build automático
 - [ ] Testar APK em dispositivo
 - [ ] Ajustar configurações se necessário
 - [ ] Gerar build de produção
 
 ## 📞 Suporte
 
-Se encontrar problemas:
+### 🌐 Build Online (Recomendado)
+Veja o arquivo `BUILD_ONLINE_GITHUB.md` para configurar builds automáticos via GitHub Actions.
+
+### 🔧 Build Local
+Se encontrar problemas no build local:
 1. Verifique a documentação do Expo EAS
 2. Execute `eas build --help` para opções
 3. Consulte logs detalhados no dashboard Expo
+
+### ⚡ Comando Rápido para Build Online
+```bash
+setup-build-online.bat
+```
