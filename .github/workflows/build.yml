@@ -33,14 +33,13 @@ jobs:
         cache: 'npm'
 
     - name: 🔧 Install dependencies
-      run: |
-        npm ci
-        npm install -g @expo/eas-cli
+      run: npm ci
 
-    - name: 🔑 Setup Expo
+    - name: 🔑 Setup Expo and EAS
       uses: expo/expo-github-action@v8
       with:
         expo-version: latest
+        eas-version: latest
         token: ${{ secrets.EXPO_TOKEN }}
 
     - name: 📱 Build APK Preview
@@ -52,6 +51,54 @@ jobs:
       run: eas build --platform android --profile development --non-interactive
 
     - name: 🚀 Build AAB Production
+      if: ${{ github.event.inputs.build_type == 'production' }}
+      run: eas build --platform android --profile production --non-interactive
+
+    - name: 📊 Get build info
+      id: build
+      run: |
+        echo "Build completed successfully!"
+        echo "Check your Expo dashboard for download link"
+
+    - name: 💬 Comment PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '🎉 Build Android concluído! Verifique seu [Expo Dashboard](https://expo.dev) para baixar o APK.'
+          })
+
+  build-ios:
+    name: 🍎 Build iOS (Opcional)
+    runs-on: ubuntu-latest
+    if: false  # Desabilitado por padrão (requer conta Apple Developer)
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: 🔧 Install dependencies
+      run: npm ci
+
+    - name: 🔑 Setup Expo and EAS
+      uses: expo/expo-github-action@v8
+      with:
+        expo-version: latest
+        eas-version: latest
+        token: ${{ secrets.EXPO_TOKEN }}
+
+    - name: 🍎 Build iOS
+      run: eas build --platform ios --profile preview --non-interactive
       if: ${{ github.event.inputs.build_type == 'production' }}
       run: eas build --platform android --profile production --non-interactive
 
