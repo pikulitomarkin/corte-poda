@@ -26,7 +26,7 @@ jobs:
       
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
@@ -60,7 +60,7 @@ jobs:
       - name: Initialize EAS project
         run: |
           echo "Initializing EAS project..."
-          eas init --non-interactive || echo "EAS init may have failed, continuing..."
+          eas init --force --non-interactive || echo "EAS init may have failed, continuing..."
           
       - name: Verify EAS configuration
         run: |
