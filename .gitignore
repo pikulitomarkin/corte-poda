@@ -13,6 +13,13 @@ build/
 .env
 .env.local
 .env.production
+.env.keystore
+
+# Android Keystore (NEVER commit!)
+*.jks
+*.keystore
+my-release-key.jks
+keystore-base64.txt
 
 # Cache
 .cache/
