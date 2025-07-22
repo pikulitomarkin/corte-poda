@@ -60,11 +60,17 @@ jobs:
       - name: Setup Android Keystore
         run: |
           echo "Setting up Android credentials..."
-          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > android-keystore.jks
-          echo "EXPO_ANDROID_KEYSTORE_PATH=./android-keystore.jks" >> $GITHUB_ENV
-          echo "EXPO_ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "EXPO_ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "EXPO_ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+          if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android-keystore.jks
+            echo "EXPO_ANDROID_KEYSTORE_PATH=./android-keystore.jks" >> $GITHUB_ENV
+            echo "EXPO_ANDROID_KEYSTORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "EXPO_ANDROID_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}" >> $GITHUB_ENV
+            echo "EXPO_ANDROID_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> $GITHUB_ENV
+            echo "✅ Android keystore configured successfully"
+            ls -la android-keystore.jks
+          else
+            echo "⚠️ No Android keystore configured - using Expo managed credentials"
+          fi
 
       - name: Initialize EAS project
         run: |
