@@ -1,0 +1,3 @@
+# Placeholder para favicon.png
+# Esta é uma imagem placeholder de 48x48 pixels
+# Favicon para versão web do app

@@ -1,0 +1,4 @@
+# Placeholder para icon.png
+# Esta é uma imagem placeholder de 1024x1024 pixels
+# Substitua por um ícone real do aplicativo
+# Sugestão: ícone com tema de grama/corte de mato em verde

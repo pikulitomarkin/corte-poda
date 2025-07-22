@@ -1,0 +1,4 @@
+# Placeholder para adaptive-icon.png
+# Esta é uma imagem placeholder de 1024x1024 pixels
+# Ícone adaptável para Android
+# Versão do ícone que se adapta a diferentes formatos do Android

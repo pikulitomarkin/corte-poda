@@ -1,0 +1,4 @@
+# Placeholder para splash.png
+# Esta é uma imagem placeholder de 1284x2778 pixels
+# Substitua por uma tela de carregamento com o logo do app
+# Fundo verde (#2e7d32) com logo centralizado
