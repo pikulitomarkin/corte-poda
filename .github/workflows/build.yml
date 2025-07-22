@@ -30,11 +30,22 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Clear npm cache
-        run: npm cache clean --force
+      - name: Force NPM usage and clear conflicts
+        run: |
+          rm -f yarn.lock
+          rm -f package-lock.json
+          npm config set fund false
+          npm config set audit false
 
-      - name: Install dependencies
-        run: npm install
+      - name: Clear all caches
+        run: |
+          npm cache clean --force
+          rm -rf node_modules
+          rm -rf ~/.npm
+          rm -rf ~/.cache
+
+      - name: Install dependencies with NPM
+        run: npm install --force
 
       - name: Setup Expo and EAS
         uses: expo/expo-github-action@v8
@@ -59,3 +70,4 @@ jobs:
         run: |
           echo "Build completed successfully!"
           echo "Check your Expo dashboard for download link"
+          echo "Build type: ${{ github.event.inputs.build_type || 'preview' }}"
