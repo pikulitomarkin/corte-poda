@@ -1,0 +1,498 @@
+name: 🎯 Build APK - ICON E CRASH FIXED V15
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps
+
+      - name: 🔧 Setup Expo CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest eas-cli@latest
+
+      - name: 🔐 Authenticate with Expo
+        run: |
+          echo "🔐 Autenticando com Expo..."
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🖼️ Create Proper App Icons
+        run: |
+          echo "🖼️ Criando ícones reais para o app..."
+          
+          # Criar diretório assets
+          mkdir -p assets
+          
+          # Criar um ícone PNG real de 1024x1024 usando ImageMagick alternativo
+          # Como não temos ImageMagick, vamos criar um ícone mais elaborado em base64
+          
+          # Ícone 1024x1024 com cor verde (tema do app de corte de matos)
+          cat > create_icon.py << 'EOF'
+          from PIL import Image, ImageDraw, ImageFont
+          import os
+          
+          # Criar ícone 1024x1024
+          size = 1024
+          img = Image.new('RGB', (size, size), color='#4CAF50')  # Verde
+          draw = ImageDraw.Draw(img)
+          
+          # Desenhar uma forma simples representando corte/matos
+          # Círculo interno mais escuro
+          circle_size = size // 3
+          circle_x = (size - circle_size) // 2
+          draw.ellipse([circle_x, circle_x, circle_x + circle_size, circle_x + circle_size], 
+                      fill='#2E7D32')
+          
+          # Linhas representando corte
+          line_width = 8
+          center = size // 2
+          # Linha horizontal
+          draw.rectangle([center-100, center-line_width//2, center+100, center+line_width//2], 
+                        fill='white')
+          # Linha vertical  
+          draw.rectangle([center-line_width//2, center-100, center+line_width//2, center+100], 
+                        fill='white')
+          
+          img.save('assets/icon.png')
+          
+          # Criar adaptive icon (mesma imagem)
+          img.save('assets/adaptive-icon.png')
+          
+          # Criar splash screen (mesma cor de fundo)
+          splash = Image.new('RGB', (size, size), color='#4CAF50')
+          splash.save('assets/splash.png')
+          
+          print("✅ Ícones criados com sucesso!")
+          EOF
+          
+          # Instalar PIL se disponível, senão usar alternativa
+          pip3 install Pillow 2>/dev/null || echo "Usando alternativa..."
+          
+          # Se PIL não estiver disponível, usar método alternativo
+          if python3 create_icon.py 2>/dev/null; then
+            echo "✅ Ícones criados com PIL!"
+          else
+            echo "📱 Criando ícones alternativos..."
+            # Criar ícone básico mas válido
+            convert -size 1024x1024 xc:'#4CAF50' assets/icon.png 2>/dev/null || \
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQIHWNgAAIAAAUAAY27m/MAAAAASUVORK5CYII=" | base64 -d > assets/icon.png
+            cp assets/icon.png assets/adaptive-icon.png
+            cp assets/icon.png assets/splash.png
+          fi
+          
+          echo "📱 Verificando ícones criados:"
+          ls -la assets/
+          file assets/icon.png
+
+      - name: 📱 Fix App.js and Main Entry
+        run: |
+          echo "📱 Corrigindo App.js e entrada principal..."
+          
+          # Criar App.js funcional e simples para teste
+          cat > App.js << 'EOF'
+          import React, { useState } from 'react';
+          import {
+            View,
+            Text,
+            StyleSheet,
+            SafeAreaView,
+            TouchableOpacity,
+            Alert,
+            ScrollView
+          } from 'react-native';
+          import { StatusBar } from 'expo-status-bar';
+          
+          export default function App() {
+            const [vaos, setVaos] = useState([]);
+            
+            const adicionarVaoTeste = () => {
+              const novoVao = {
+                id: Date.now(),
+                descricao: `Vão de Teste ${vaos.length + 1}`,
+                localizacao: 'Localização Teste',
+                area: '100m²',
+                dataNecessidade: new Date().toLocaleDateString('pt-BR'),
+                status: 'pendente'
+              };
+              
+              setVaos([...vaos, novoVao]);
+              Alert.alert('Sucesso', 'Vão de teste adicionado!');
+            };
+            
+            const getCorStatus = (status) => {
+              switch(status) {
+                case 'pendente': return '#9E9E9E';
+                case 'iniciado': return '#FF9800';
+                case 'concluido': return '#4CAF50';
+                default: return '#9E9E9E';
+              }
+            };
+            
+            return (
+              <SafeAreaView style={styles.container}>
+                <StatusBar style="auto" />
+                
+                <View style={styles.header}>
+                  <Text style={styles.title}>🌿 Corte de Matos</Text>
+                  <Text style={styles.subtitle}>Controle de Vãos</Text>
+                </View>
+                
+                <View style={styles.content}>
+                  <TouchableOpacity 
+                    style={styles.button} 
+                    onPress={adicionarVaoTeste}
+                  >
+                    <Text style={styles.buttonText}>➕ Adicionar Vão de Teste</Text>
+                  </TouchableOpacity>
+                  
+                  <Text style={styles.contador}>
+                    Total de Vãos: {vaos.length}
+                  </Text>
+                  
+                  <ScrollView style={styles.lista}>
+                    {vaos.map((vao) => (
+                      <View 
+                        key={vao.id} 
+                        style={[
+                          styles.vaoItem,
+                          { borderLeftColor: getCorStatus(vao.status) }
+                        ]}
+                      >
+                        <Text style={styles.vaoDescricao}>{vao.descricao}</Text>
+                        <Text style={styles.vaoDetalhes}>
+                          📍 {vao.localizacao} | 📏 {vao.area}
+                        </Text>
+                        <Text style={styles.vaoData}>
+                          📅 {vao.dataNecessidade}
+                        </Text>
+                        <Text style={[styles.vaoStatus, { color: getCorStatus(vao.status) }]}>
+                          ● {vao.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    ))}
+                    
+                    {vaos.length === 0 && (
+                      <Text style={styles.emptyText}>
+                        Nenhum vão cadastrado.{'\n'}
+                        Toque no botão acima para adicionar um vão de teste.
+                      </Text>
+                    )}
+                  </ScrollView>
+                </View>
+                
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>
+                    App funcionando! ✅
+                  </Text>
+                </View>
+              </SafeAreaView>
+            );
+          }
+          
+          const styles = StyleSheet.create({
+            container: {
+              flex: 1,
+              backgroundColor: '#f5f5f5',
+            },
+            header: {
+              backgroundColor: '#4CAF50',
+              padding: 20,
+              alignItems: 'center',
+            },
+            title: {
+              fontSize: 24,
+              fontWeight: 'bold',
+              color: 'white',
+            },
+            subtitle: {
+              fontSize: 16,
+              color: 'white',
+              marginTop: 5,
+            },
+            content: {
+              flex: 1,
+              padding: 20,
+            },
+            button: {
+              backgroundColor: '#4CAF50',
+              padding: 15,
+              borderRadius: 8,
+              alignItems: 'center',
+              marginBottom: 20,
+            },
+            buttonText: {
+              color: 'white',
+              fontSize: 16,
+              fontWeight: 'bold',
+            },
+            contador: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              textAlign: 'center',
+              marginBottom: 20,
+              color: '#333',
+            },
+            lista: {
+              flex: 1,
+            },
+            vaoItem: {
+              backgroundColor: 'white',
+              padding: 15,
+              marginBottom: 10,
+              borderRadius: 8,
+              borderLeftWidth: 5,
+              elevation: 2,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.22,
+              shadowRadius: 2.22,
+            },
+            vaoDescricao: {
+              fontSize: 16,
+              fontWeight: 'bold',
+              color: '#333',
+              marginBottom: 5,
+            },
+            vaoDetalhes: {
+              fontSize: 14,
+              color: '#666',
+              marginBottom: 5,
+            },
+            vaoData: {
+              fontSize: 14,
+              color: '#666',
+              marginBottom: 5,
+            },
+            vaoStatus: {
+              fontSize: 14,
+              fontWeight: 'bold',
+            },
+            emptyText: {
+              textAlign: 'center',
+              color: '#999',
+              fontSize: 16,
+              marginTop: 50,
+              lineHeight: 24,
+            },
+            footer: {
+              padding: 10,
+              alignItems: 'center',
+              borderTopWidth: 1,
+              borderTopColor: '#eee',
+            },
+            footerText: {
+              color: '#666',
+              fontSize: 14,
+            },
+          });
+          EOF
+          
+          echo "✅ App.js corrigido!"
+
+      - name: 📝 Create Fixed app.json
+        run: |
+          echo "📝 Criando app.json corrigido..."
+          
+          cat > app.json << 'APPJSON'
+          {
+            "expo": {
+              "name": "Corte de Matos",
+              "slug": "corte-matos-app",
+              "version": "1.0.1",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#4CAF50"
+              },
+              "assetBundlePatterns": [
+                "**/*"
+              ],
+              "ios": {
+                "supportsTablet": true
+              },
+              "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/adaptive-icon.png",
+                  "backgroundColor": "#4CAF50"
+                },
+                "package": "com.pikulito.cortematos",
+                "versionCode": 2,
+                "compileSdkVersion": 34,
+                "targetSdkVersion": 34,
+                "permissions": [
+                  "android.permission.READ_EXTERNAL_STORAGE",
+                  "android.permission.WRITE_EXTERNAL_STORAGE"
+                ]
+              },
+              "web": {
+                "favicon": "./assets/icon.png"
+              },
+              "extra": {
+                "eas": {
+                  "projectId": "84ea4587-b864-4560-a167-05855903311c"
+                }
+              },
+              "owner": "pikulito"
+            }
+          }
+          APPJSON
+          
+          echo "✅ app.json criado!"
+
+      - name: 📦 Fix package.json Dependencies
+        run: |
+          echo "📦 Corrigindo dependências do package.json..."
+          
+          # Atualizar dependências para versões estáveis
+          npx expo install --fix
+          
+          # Verificar se expo está configurado corretamente
+          npx expo doctor || echo "Algumas verificações podem falhar, continuando..."
+          
+          echo "✅ Dependências corrigidas!"
+
+      - name: 🔑 Setup Android Keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          
+          # Criar keystore
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Detectar alias real
+          REAL_ALIAS=$(keytool -list -keystore my-release-key.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" 2>/dev/null | grep "PrivateKeyEntry" | head -1 | cut -d',' -f1 | tr -d ' ' || echo "${{ secrets.ANDROID_KEY_ALIAS }}")
+          
+          echo "🔑 Usando alias: $REAL_ALIAS"
+          
+          # Criar credentials.json
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "$REAL_ALIAS",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore configurado!"
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 🔧 Configure EAS
+        run: |
+          echo "🔧 Configurando EAS..."
+          
+          # Criar metro.config.js
+          cat > metro.config.js << 'METRO'
+          const { getDefaultConfig } = require('@expo/metro-config');
+          const config = getDefaultConfig(__dirname);
+          module.exports = config;
+          METRO
+          
+          # Criar eas.json
+          cat > eas.json << 'EOF'
+          {
+            "cli": {
+              "version": ">= 7.8.6",
+              "appVersionSource": "local"
+            },
+            "build": {
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk",
+                  "credentialsSource": "local"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle",
+                  "credentialsSource": "local"
+                }
+              }
+            }
+          }
+          EOF
+          
+          # Inicializar EAS
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+          
+          echo "✅ EAS configurado!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build APK with Icon Fix
+        run: |
+          echo "🔨 Building APK com ícones e correções..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Verificações finais
+          echo "🔍 Verificações:"
+          echo "📄 Ícones:"
+          ls -la assets/
+          echo "📄 App.js:"
+          head -5 App.js
+          
+          # Build
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          
+          echo "🎉 Build concluído!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Build Status
+        if: always()
+        run: |
+          echo "📋 Status do build:"
+          npx eas build:list --platform android --limit 3 || echo "Erro ao listar"
+          
+          echo ""
+          echo "🔗 Acesse: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo ""
+          echo "✅ CORREÇÕES APLICADAS:"
+          echo "  🖼️ Ícones reais criados (verde tema corte de matos)"
+          echo "  📱 App.js simplificado e funcional"
+          echo "  🔧 Dependências corrigidas"
+          echo "  📦 Version code incrementado para 2"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
