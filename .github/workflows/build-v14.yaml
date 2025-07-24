@@ -1,0 +1,243 @@
+name: 🎯 Build APK - KEYSTORE ALIAS FIXED V14
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps
+
+      - name: 🔧 Setup Expo CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest eas-cli@latest
+
+      - name: 🔐 Authenticate with Expo
+        run: |
+          echo "🔐 Autenticando com Expo..."
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🖼️ Create Assets and Fix App Config
+        run: |
+          echo "🖼️ Criando assets e corrigindo configuração..."
+          
+          # Criar diretório assets
+          mkdir -p assets
+          
+          # Criar PNG válido (1x1 pixel transparente)
+          echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQIHWNgAAIAAAUAAY27m/MAAAAASUVORK5CYII=" | base64 -d > assets/icon.png
+          cp assets/icon.png assets/adaptive-icon.png
+          cp assets/icon.png assets/splash.png
+          
+          # Criar app.json otimizado
+          cat > app.json << 'APPJSON'
+          {
+            "expo": {
+              "name": "Corte de Matos",
+              "slug": "corte-matos-app",
+              "version": "1.0.0",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#ffffff"
+              },
+              "assetBundlePatterns": ["**/*"],
+              "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/adaptive-icon.png",
+                  "backgroundColor": "#FFFFFF"
+                },
+                "package": "com.pikulito.cortematos",
+                "versionCode": 1,
+                "compileSdkVersion": 34,
+                "targetSdkVersion": 34,
+                "permissions": [
+                  "android.permission.READ_EXTERNAL_STORAGE",
+                  "android.permission.WRITE_EXTERNAL_STORAGE"
+                ]
+              },
+              "extra": {
+                "eas": {
+                  "projectId": "84ea4587-b864-4560-a167-05855903311c"
+                }
+              },
+              "owner": "pikulito"
+            }
+          }
+          APPJSON
+          
+          echo "✅ Assets e app.json criados!"
+
+      - name: 🔍 Debug Keystore and Create Credentials
+        run: |
+          echo "🔍 Analisando keystore e criando credentials..."
+          
+          # Criar keystore a partir do base64
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          # Listar aliases disponíveis no keystore para debug
+          echo "🔑 Aliases disponíveis no keystore:"
+          keytool -list -keystore my-release-key.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" || echo "Erro ao listar aliases"
+          
+          # Descobrir o alias real do keystore
+          echo "📋 Detalhes do keystore:"
+          keytool -list -v -keystore my-release-key.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" | head -20 || echo "Usando alias padrão"
+          
+          # Criar credentials.json com alias correto
+          # Primeiro, tentar descobrir o alias real
+          REAL_ALIAS=$(keytool -list -keystore my-release-key.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" 2>/dev/null | grep "PrivateKeyEntry" | head -1 | cut -d',' -f1 | tr -d ' ' || echo "")
+          
+          if [ -z "$REAL_ALIAS" ]; then
+            echo "⚠️ Não foi possível detectar alias, usando o configurado nas secrets"
+            REAL_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
+          fi
+          
+          echo "🔑 Usando alias: $REAL_ALIAS"
+          
+          # Criar credentials.json com alias correto
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "$REAL_ALIAS",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+          
+          echo "✅ Keystore e credentials configurados!"
+          echo "📄 Conteúdo do credentials.json (sem senhas):"
+          cat credentials.json | grep -E "(keyAlias|keystorePath)" || echo "Arquivo criado"
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 🔧 Configure EAS with Fixed Dependencies
+        run: |
+          echo "🔧 Configurando EAS com dependências corrigidas..."
+          
+          # Atualizar dependências para versões compatíveis
+          echo "📦 Atualizando dependências..."
+          npx expo install --fix
+          
+          # Criar metro.config.js correto
+          cat > metro.config.js << 'METRO'
+          const { getDefaultConfig } = require('@expo/metro-config');
+          const config = getDefaultConfig(__dirname);
+          module.exports = config;
+          METRO
+          
+          # Criar eas.json com configuração otimizada
+          cat > eas.json << 'EOF'
+          {
+            "cli": {
+              "version": ">= 7.8.6",
+              "appVersionSource": "local"
+            },
+            "build": {
+              "development": {
+                "developmentClient": true,
+                "distribution": "internal",
+                "android": {
+                  "gradleCommand": ":app:assembleDebug",
+                  "credentialsSource": "local"
+                }
+              },
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk",
+                  "credentialsSource": "local"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle",
+                  "credentialsSource": "local"
+                }
+              }
+            }
+          }
+          EOF
+          
+          # Inicializar projeto EAS
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+          
+          echo "✅ EAS configurado!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build APK with Fixed Keystore
+        run: |
+          echo "🔨 Iniciando build APK com keystore corrigido..."
+          echo "📱 Profile: ${{ github.event.inputs.profile }}"
+          
+          # Verificações finais
+          echo "🔍 Verificações finais:"
+          ls -la
+          echo "📄 Keystore info:"
+          file my-release-key.jks
+          echo "📄 Credentials preview:"
+          grep -E "(keyAlias|keystorePath)" credentials.json
+          
+          # Build com EAS
+          echo "🚀 Executando build..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          
+          echo "🎉 Build concluído com sucesso!"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Build Status
+        if: always()
+        run: |
+          echo "📋 Status final do build:"
+          
+          # Listar builds recentes
+          echo "📱 Últimos builds:"
+          npx eas build:list --platform android --limit 3 || echo "Não foi possível listar builds"
+          
+          echo ""
+          echo "🔗 Links úteis:"
+          echo "🌐 EAS Dashboard: https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+          echo "📝 Para ver logs detalhados, acesse o link do build específico"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
