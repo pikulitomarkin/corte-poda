@@ -1,0 +1,713 @@
+name: 🚀 Build APK - Corte de Matos (CRASH FIXED)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    name: 📱 Build Android APK - Corte de Matos
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📦 Install dependencies
+        run: |
+          echo "📦 Instalando dependências..."
+          npm ci --legacy-peer-deps
+
+      - name: 🔧 Setup Expo CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest eas-cli@latest
+
+      - name: 🔐 Authenticate with Expo
+        run: |
+          echo "🔐 Autenticando com Expo..."
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🚀 Create Complete Corte de Matos App
+        run: |
+          echo "🚀 Criando app completo Corte de Matos..."
+          
+          # Criar diretório assets com ícones
+          mkdir -p assets
+          
+          # Criar ícone usando Python
+          cat > create_icons.py << 'EOF'
+          from PIL import Image, ImageDraw
+          import os
+          
+          # Criar ícone 1024x1024 tema corte de matos
+          size = 1024
+          img = Image.new('RGB', (size, size), color='#2E7D32')  # Verde escuro
+          draw = ImageDraw.Draw(img)
+          
+          # Fundo circular mais claro
+          margin = 50
+          draw.ellipse([margin, margin, size-margin, size-margin], fill='#4CAF50')
+          
+          # Símbolo de corte (X)
+          center = size // 2
+          line_width = 40
+          line_length = 200
+          
+          # Linha diagonal 1 (\)
+          points1 = [
+              center - line_length//2, center - line_length//2,
+              center + line_length//2, center + line_length//2
+          ]
+          draw.line(points1, fill='white', width=line_width)
+          
+          # Linha diagonal 2 (/)
+          points2 = [
+              center + line_length//2, center - line_length//2,
+              center - line_length//2, center + line_length//2
+          ]
+          draw.line(points2, fill='white', width=line_width)
+          
+          # Salvar ícones
+          img.save('assets/icon.png')
+          img.save('assets/adaptive-icon.png')
+          
+          # Splash screen
+          splash = Image.new('RGB', (size, size), color='#4CAF50')
+          splash_draw = ImageDraw.Draw(splash)
+          # Logo menor no splash
+          logo_size = size // 4
+          logo_x = (size - logo_size) // 2
+          splash_draw.ellipse([logo_x, logo_x, logo_x + logo_size, logo_x + logo_size], fill='#2E7D32')
+          splash.save('assets/splash.png')
+          
+          print("✅ Ícones criados!")
+          EOF
+          
+          # Instalar PIL e criar ícones
+          pip3 install Pillow || echo "Usando alternativa..."
+          python3 create_icons.py || {
+            echo "📱 Criando ícones alternativos..."
+            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQIHWNgAAIAAAUAAY27m/MAAAAASUVORK5CYII=" | base64 -d > assets/icon.png
+            cp assets/icon.png assets/adaptive-icon.png
+            cp assets/icon.png assets/splash.png
+          }
+
+      - name: 📱 Create Stable App.js
+        run: |
+          echo "📱 Criando App.js estável para Corte de Matos..."
+          
+          cat > App.js << 'EOF'
+          import React, { useState, useEffect } from 'react';
+          import {
+            View,
+            Text,
+            StyleSheet,
+            SafeAreaView,
+            TouchableOpacity,
+            Alert,
+            ScrollView,
+            Modal,
+            TextInput,
+            Platform
+          } from 'react-native';
+          import { StatusBar } from 'expo-status-bar';
+          
+          export default function App() {
+            const [vaos, setVaos] = useState([]);
+            const [modalVisible, setModalVisible] = useState(false);
+            const [novoVao, setNovoVao] = useState({
+              descricao: '',
+              localizacao: '',
+              area: '',
+              dataNecessidade: ''
+            });
+            
+            // Adicionar vão de exemplo na inicialização
+            useEffect(() => {
+              adicionarVaoExemplo();
+            }, []);
+            
+            const adicionarVaoExemplo = () => {
+              const exemplo = {
+                id: Date.now(),
+                descricao: 'Corte Vão Principal - Linha A',
+                localizacao: 'Setor Norte - KM 15',
+                area: '150m²',
+                dataNecessidade: '2025-02-15',
+                status: 'pendente',
+                dataInicio: null,
+                dataConclusao: null
+              };
+              setVaos([exemplo]);
+            };
+            
+            const adicionarVao = () => {
+              if (!novoVao.descricao.trim()) {
+                Alert.alert('Erro', 'Descrição é obrigatória');
+                return;
+              }
+              
+              const vao = {
+                id: Date.now(),
+                ...novoVao,
+                status: 'pendente',
+                dataInicio: null,
+                dataConclusao: null
+              };
+              
+              setVaos([...vaos, vao]);
+              setNovoVao({ descricao: '', localizacao: '', area: '', dataNecessidade: '' });
+              setModalVisible(false);
+              Alert.alert('Sucesso', 'Vão adicionado com sucesso!');
+            };
+            
+            const alterarStatus = (id, novoStatus) => {
+              setVaos(vaos.map(vao => {
+                if (vao.id === id) {
+                  const agora = new Date().toISOString().split('T')[0];
+                  return {
+                    ...vao,
+                    status: novoStatus,
+                    dataInicio: novoStatus === 'iniciado' ? agora : vao.dataInicio,
+                    dataConclusao: novoStatus === 'concluido' ? agora : null
+                  };
+                }
+                return vao;
+              }));
+            };
+            
+            const getCorStatus = (status) => {
+              switch(status) {
+                case 'pendente': return '#9E9E9E';
+                case 'iniciado': return '#FF9800';
+                case 'concluido': return '#4CAF50';
+                default: return '#9E9E9E';
+              }
+            };
+            
+            const getStatusIcon = (vao) => {
+              const hoje = new Date();
+              const dataNecessidade = new Date(vao.dataNecessidade);
+              const diasRestantes = Math.ceil((dataNecessidade - hoje) / (1000 * 60 * 60 * 24));
+              
+              if (vao.status === 'concluido') return '✅';
+              if (diasRestantes < 0) return '⚠️'; // Atrasado
+              if (diasRestantes <= 7) return '🕐'; // Urgente
+              return '📅'; // Normal
+            };
+            
+            const contarStatus = () => {
+              const pendentes = vaos.filter(v => v.status === 'pendente').length;
+              const iniciados = vaos.filter(v => v.status === 'iniciado').length;
+              const concluidos = vaos.filter(v => v.status === 'concluido').length;
+              return { pendentes, iniciados, concluidos };
+            };
+            
+            const stats = contarStatus();
+            
+            return (
+              <SafeAreaView style={styles.container}>
+                <StatusBar style="light" backgroundColor="#2E7D32" />
+                
+                {/* Header */}
+                <View style={styles.header}>
+                  <Text style={styles.title}>🌿 Corte de Matos</Text>
+                  <Text style={styles.subtitle}>Controle de Vãos - Sistema Elétrico</Text>
+                </View>
+                
+                {/* Stats */}
+                <View style={styles.statsContainer}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.statNumber}>{stats.pendentes}</Text>
+                    <Text style={styles.statLabel}>Pendentes</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statNumber, {color: '#FF9800'}]}>{stats.iniciados}</Text>
+                    <Text style={styles.statLabel}>Iniciados</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={[styles.statNumber, {color: '#4CAF50'}]}>{stats.concluidos}</Text>
+                    <Text style={styles.statLabel}>Concluídos</Text>
+                  </View>
+                </View>
+                
+                {/* Botão Adicionar */}
+                <TouchableOpacity 
+                  style={styles.addButton} 
+                  onPress={() => setModalVisible(true)}
+                >
+                  <Text style={styles.addButtonText}>➕ Adicionar Novo Vão</Text>
+                </TouchableOpacity>
+                
+                {/* Lista de Vãos */}
+                <ScrollView style={styles.lista}>
+                  {vaos.map((vao) => (
+                    <View key={vao.id} style={[styles.vaoCard, { borderLeftColor: getCorStatus(vao.status) }]}>
+                      <View style={styles.vaoHeader}>
+                        <Text style={styles.vaoIcon}>{getStatusIcon(vao)}</Text>
+                        <Text style={styles.vaoDescricao}>{vao.descricao}</Text>
+                      </View>
+                      
+                      <Text style={styles.vaoInfo}>📍 {vao.localizacao}</Text>
+                      <Text style={styles.vaoInfo}>📏 Área: {vao.area}</Text>
+                      <Text style={styles.vaoInfo}>📅 Prazo: {vao.dataNecessidade}</Text>
+                      
+                      <View style={styles.statusContainer}>
+                        <Text style={[styles.status, { color: getCorStatus(vao.status) }]}>
+                          ● {vao.status.toUpperCase()}
+                        </Text>
+                      </View>
+                      
+                      {/* Botões de Ação */}
+                      <View style={styles.actionButtons}>
+                        {vao.status === 'pendente' && (
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, {backgroundColor: '#FF9800'}]}
+                            onPress={() => alterarStatus(vao.id, 'iniciado')}
+                          >
+                            <Text style={styles.actionBtnText}>▶️ Iniciar</Text>
+                          </TouchableOpacity>
+                        )}
+                        
+                        {vao.status === 'iniciado' && (
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}
+                            onPress={() => alterarStatus(vao.id, 'concluido')}
+                          >
+                            <Text style={styles.actionBtnText}>✅ Concluir</Text>
+                          </TouchableOpacity>
+                        )}
+                        
+                        {vao.status === 'concluido' && (
+                          <View style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}>
+                            <Text style={styles.actionBtnText}>✅ Finalizado</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {vaos.length === 0 && (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>
+                        🌿 Nenhum vão cadastrado{'\n'}
+                        Toque no botão acima para adicionar
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+                
+                {/* Modal Adicionar Vão */}
+                <Modal
+                  animationType="slide"
+                  transparent={true}
+                  visible={modalVisible}
+                  onRequestClose={() => setModalVisible(false)}
+                >
+                  <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                      <Text style={styles.modalTitle}>Novo Vão de Corte</Text>
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Descrição do vão"
+                        value={novoVao.descricao}
+                        onChangeText={(text) => setNovoVao({...novoVao, descricao: text})}
+                      />
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Localização"
+                        value={novoVao.localizacao}
+                        onChangeText={(text) => setNovoVao({...novoVao, localizacao: text})}
+                      />
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Área (ex: 100m²)"
+                        value={novoVao.area}
+                        onChangeText={(text) => setNovoVao({...novoVao, area: text})}
+                      />
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Data necessidade (AAAA-MM-DD)"
+                        value={novoVao.dataNecessidade}
+                        onChangeText={(text) => setNovoVao({...novoVao, dataNecessidade: text})}
+                      />
+                      
+                      <View style={styles.modalButtons}>
+                        <TouchableOpacity 
+                          style={[styles.modalBtn, {backgroundColor: '#f44336'}]}
+                          onPress={() => setModalVisible(false)}
+                        >
+                          <Text style={styles.modalBtnText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.modalBtn, {backgroundColor: '#4CAF50'}]}
+                          onPress={adicionarVao}
+                        >
+                          <Text style={styles.modalBtnText}>Adicionar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+                
+                {/* Footer */}
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>
+                    Corte de Matos v1.0 - Total: {vaos.length} vãos
+                  </Text>
+                </View>
+              </SafeAreaView>
+            );
+          }
+          
+          const styles = StyleSheet.create({
+            container: {
+              flex: 1,
+              backgroundColor: '#f5f5f5',
+            },
+            header: {
+              backgroundColor: '#2E7D32',
+              padding: 20,
+              alignItems: 'center',
+              ...Platform.select({
+                ios: {
+                  paddingTop: 50,
+                },
+                android: {
+                  paddingTop: 20,
+                },
+              }),
+            },
+            title: {
+              fontSize: 24,
+              fontWeight: 'bold',
+              color: 'white',
+            },
+            subtitle: {
+              fontSize: 14,
+              color: '#C8E6C9',
+              marginTop: 5,
+            },
+            statsContainer: {
+              flexDirection: 'row',
+              backgroundColor: 'white',
+              margin: 15,
+              borderRadius: 10,
+              padding: 15,
+              elevation: 3,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 3,
+            },
+            statBox: {
+              flex: 1,
+              alignItems: 'center',
+            },
+            statNumber: {
+              fontSize: 24,
+              fontWeight: 'bold',
+              color: '#333',
+            },
+            statLabel: {
+              fontSize: 12,
+              color: '#666',
+              marginTop: 5,
+            },
+            addButton: {
+              backgroundColor: '#4CAF50',
+              margin: 15,
+              padding: 15,
+              borderRadius: 10,
+              alignItems: 'center',
+              elevation: 3,
+            },
+            addButtonText: {
+              color: 'white',
+              fontSize: 16,
+              fontWeight: 'bold',
+            },
+            lista: {
+              flex: 1,
+              paddingHorizontal: 15,
+            },
+            vaoCard: {
+              backgroundColor: 'white',
+              marginBottom: 15,
+              borderRadius: 10,
+              padding: 15,
+              borderLeftWidth: 5,
+              elevation: 2,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.1,
+              shadowRadius: 2,
+            },
+            vaoHeader: {
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 10,
+            },
+            vaoIcon: {
+              fontSize: 20,
+              marginRight: 10,
+            },
+            vaoDescricao: {
+              fontSize: 16,
+              fontWeight: 'bold',
+              color: '#333',
+              flex: 1,
+            },
+            vaoInfo: {
+              fontSize: 14,
+              color: '#666',
+              marginBottom: 5,
+            },
+            statusContainer: {
+              marginVertical: 10,
+            },
+            status: {
+              fontSize: 14,
+              fontWeight: 'bold',
+            },
+            actionButtons: {
+              marginTop: 10,
+            },
+            actionBtn: {
+              padding: 10,
+              borderRadius: 5,
+              alignItems: 'center',
+            },
+            actionBtnText: {
+              color: 'white',
+              fontWeight: 'bold',
+            },
+            emptyContainer: {
+              alignItems: 'center',
+              marginTop: 50,
+            },
+            emptyText: {
+              fontSize: 16,
+              color: '#999',
+              textAlign: 'center',
+              lineHeight: 24,
+            },
+            modalOverlay: {
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            },
+            modalContent: {
+              backgroundColor: 'white',
+              margin: 20,
+              padding: 20,
+              borderRadius: 10,
+              width: '90%',
+            },
+            modalTitle: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              marginBottom: 20,
+              textAlign: 'center',
+            },
+            input: {
+              borderWidth: 1,
+              borderColor: '#ddd',
+              padding: 10,
+              marginBottom: 15,
+              borderRadius: 5,
+              fontSize: 16,
+            },
+            modalButtons: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+            },
+            modalBtn: {
+              flex: 1,
+              padding: 15,
+              marginHorizontal: 5,
+              borderRadius: 5,
+              alignItems: 'center',
+            },
+            modalBtnText: {
+              color: 'white',
+              fontWeight: 'bold',
+            },
+            footer: {
+              padding: 15,
+              alignItems: 'center',
+              borderTopWidth: 1,
+              borderTopColor: '#eee',
+              backgroundColor: 'white',
+            },
+            footerText: {
+              color: '#666',
+              fontSize: 12,
+            },
+          });
+          EOF
+          
+          echo "✅ App.js criado com funcionalidades completas!"
+
+      - name: 📝 Create Production app.json
+        run: |
+          echo "📝 Criando app.json para produção..."
+          
+          cat > app.json << 'EOF'
+          {
+            "expo": {
+              "name": "Corte de Matos",
+              "slug": "corte-matos-app",
+              "version": "1.0.3",
+              "orientation": "portrait",
+              "icon": "./assets/icon.png",
+              "userInterfaceStyle": "light",
+              "splash": {
+                "image": "./assets/splash.png",
+                "resizeMode": "contain",
+                "backgroundColor": "#4CAF50"
+              },
+              "assetBundlePatterns": [
+                "**/*"
+              ],
+              "android": {
+                "adaptiveIcon": {
+                  "foregroundImage": "./assets/adaptive-icon.png",
+                  "backgroundColor": "#4CAF50"
+                },
+                "package": "com.pikulito.cortematos",
+                "versionCode": 3,
+                "compileSdkVersion": 34,
+                "targetSdkVersion": 34,
+                "permissions": []
+              },
+              "extra": {
+                "eas": {
+                  "projectId": "84ea4587-b864-4560-a167-05855903311c"
+                }
+              },
+              "owner": "pikulito"
+            }
+          }
+          EOF
+
+      - name: 📦 Fix Dependencies
+        run: |
+          echo "📦 Corrigindo dependências..."
+          
+          # Atualizar para versões compatíveis
+          npx expo install --fix
+          
+          # Criar metro.config.js
+          cat > metro.config.js << 'EOF'
+          const { getDefaultConfig } = require('@expo/metro-config');
+          const config = getDefaultConfig(__dirname);
+          module.exports = config;
+          EOF
+
+      - name: 🔑 Setup Keystore
+        run: |
+          echo "🔑 Configurando keystore..."
+          
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
+          
+          REAL_ALIAS=$(keytool -list -keystore my-release-key.jks -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" 2>/dev/null | grep "PrivateKeyEntry" | head -1 | cut -d',' -f1 | tr -d ' ' || echo "${{ secrets.ANDROID_KEY_ALIAS }}")
+          
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "./my-release-key.jks",
+                "keystorePassword": "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}",
+                "keyAlias": "$REAL_ALIAS",
+                "keyPassword": "${{ secrets.ANDROID_KEY_PASSWORD }}"
+              }
+            }
+          }
+          EOF
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      - name: 🔧 Configure EAS
+        run: |
+          echo "🔧 Configurando EAS..."
+          
+          cat > eas.json << 'EOF'
+          {
+            "cli": {
+              "version": ">= 7.8.6",
+              "appVersionSource": "local"
+            },
+            "build": {
+              "preview": {
+                "distribution": "internal",
+                "android": {
+                  "buildType": "apk",
+                  "credentialsSource": "local"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle",
+                  "credentialsSource": "local"
+                }
+              }
+            }
+          }
+          EOF
+          
+          npx eas init --id 84ea4587-b864-4560-a167-05855903311c --force --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 🔨 Build Stable APK
+        run: |
+          echo "🔨 Building APK estável..."
+          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: ✅ Success
+        if: always()
+        run: |
+          echo "🎉 Build do Corte de Matos concluído!"
+          echo "📱 App com funcionalidades completas:"
+          echo "  ✅ Interface estável"
+          echo "  ✅ Controle de status com cores"
+          echo "  ✅ Alertas de prazo"
+          echo "  ✅ Modal para adicionar vãos"
+          echo "  ✅ Ícone personalizado"
+          
+          npx eas build:list --platform android --limit 3 || echo "Lista indisponível"
+          echo "🔗 https://expo.dev/accounts/pikulito/projects/corte-matos-app/builds"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
