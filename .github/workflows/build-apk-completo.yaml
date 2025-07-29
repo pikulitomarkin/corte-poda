@@ -75,11 +75,8 @@ jobs:
         run: |
           echo "🔧 Instalando Expo CLI e EAS CLI..."
           npm install -g @expo/cli@latest eas-cli@latest
-
-      - name: 🔧 Setup Expo CLI
-        run: |
-          echo "🔧 Instalando Expo CLI e EAS CLI..."
-          npm install -g @expo/cli@latest eas-cli@latest
+          npx eas-cli --version
+          npx expo --version
 
       - name: 📝 Criar App.js
         run: |
@@ -1051,18 +1048,17 @@ jobs:
             KEY_ALIAS="upload"
             KEY_PASSWORD="temppassword"
           fi
-          cat > credentials.json << EOF
-          {
+          echo '{
             "android": {
               "keystore": {
                 "keystorePath": "./my-release-key.jks",
-                "keystorePassword": "$KEYSTORE_PASSWORD",
-                "keyAlias": "$KEY_ALIAS",
-                "keyPassword": "$KEY_PASSWORD"
+                "keystorePassword": "'$KEYSTORE_PASSWORD'",
+                "keyAlias": "'$KEY_ALIAS'",
+                "keyPassword": "'$KEY_PASSWORD'"
               }
             }
-          }
-          EOF
+          }' > credentials.json
+          cat credentials.json
 
       - name: 🔧 Garantir eas.json
         run: |
@@ -1093,9 +1089,26 @@ jobs:
       - name: 🔨 Build Corte de Matos APK
         run: |
           echo "🔨 Build APK completo do Corte de Matos..."
+          
+          # Criar um diretório temporário para o build
+          mkdir -p build-output
+          
+          # Verificar arquivos críticos
+          ls -la
+          echo "Verificando credenciais:"
+          cat credentials.json
+          echo "Verificando app.json:"
+          cat app.json
+          echo "Verificando eas.json:"
+          cat eas.json
+          
+          # Configurar EAS
+          npx eas-cli config --non-interactive
+          
+          # Executar o build com mais flags para torná-lo mais resiliente
           export EAS_NO_VCS=1
           export CI=1
-          npx eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive --wait
+          npx eas-cli build --platform android --profile ${{ github.event.inputs.profile }} --local --output=./build-output/app.apk --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -1105,11 +1118,14 @@ jobs:
         with:
           name: corte-matos-apk
           path: |
-            output.apk
+            build-output/app.apk
             build-output/*.apk
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: ✅ Build Status
         if: always()
         run: |
-          echo "Build finalizado. Baixe o APK nos artefatos ou pelo dashboard do Expo."
+          echo "Build finalizado."
+          echo "Verificando diretório de saída:"
+          ls -la build-output/ || true
+          echo "Baixe o APK nos artefatos ou pelo dashboard do Expo."
