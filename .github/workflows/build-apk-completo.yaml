@@ -59,6 +59,7 @@ jobs:
               "expo-sharing": "~11.10.0",
               "expo-status-bar": "~1.11.1",
               "expo-build-properties": "~0.11.1",
+              "expo-dev-client": "~3.3.9",
               "react": "18.2.0",
               "react-native": "0.73.4",
               "react-native-elements": "^3.4.3",
@@ -83,6 +84,42 @@ jobs:
           npm install -g @expo/cli@latest eas-cli@latest
           npx eas-cli --version
           npx expo --version
+          
+      - name: 🚀 Inicializar EAS
+        run: |
+          echo "🚀 Inicializando projeto EAS..."
+          # Usar a flag --non-interactive para evitar prompts
+          echo 'y' | npx eas-cli init --non-interactive || true
+          
+          # Verificar se a inicialização foi bem-sucedida
+          if [ ! -f "eas.json" ]; then
+            echo "Criando eas.json manualmente..."
+            cat > eas.json << 'EOF'
+            {
+              "cli": {
+                "version": ">= 7.0.0",
+                "appVersionSource": "local",
+                "requireCommit": false
+              },
+              "build": {
+                "preview": {
+                  "distribution": "internal",
+                  "android": {
+                    "buildType": "apk",
+                    "gradleCommand": ":app:assembleRelease",
+                    "developmentClient": false
+                  }
+                },
+                "production": {
+                  "android": {
+                    "buildType": "apk",
+                    "gradleCommand": ":app:assembleRelease"
+                  }
+                }
+              }
+            }
+            EOF
+          fi
 
       - name: 📝 Criar App.js
         run: |
@@ -1160,6 +1197,65 @@ jobs:
           android.disableAutomaticComponentCreation=true
           EOF
           
+          # Criar arquivo build.gradle personalizado para o app (será usado após o prebuild)
+          mkdir -p android/app
+          cat > android/app/build.gradle.template << 'EOF'
+          // Este arquivo será usado para substituir configurações problemáticas no build.gradle gerado
+          apply plugin: "com.android.application"
+
+          import com.android.build.OutputFile
+          import org.apache.tools.ant.taskdefs.condition.Os
+
+          /**
+           * Definição do patch para o build.gradle gerado pelo Expo
+           * Este código substitui configurações problemáticas no build.gradle gerado
+           */
+
+          android {
+            namespace "com.managematos.cortepoda"
+            compileSdkVersion 33
+            buildToolsVersion "33.0.0"
+            ndkVersion "25.2.9519653"
+
+            compileOptions {
+              sourceCompatibility JavaVersion.VERSION_11
+              targetCompatibility JavaVersion.VERSION_11
+            }
+
+            defaultConfig {
+              applicationId "com.managematos.cortepoda"
+              minSdkVersion 21
+              targetSdkVersion 33
+              versionCode 1
+              versionName "1.0.0"
+            }
+
+            signingConfigs {
+              release {
+                if (project.hasProperty('MYAPP_UPLOAD_STORE_FILE')) {
+                  storeFile file(MYAPP_UPLOAD_STORE_FILE)
+                  storePassword MYAPP_UPLOAD_STORE_PASSWORD
+                  keyAlias MYAPP_UPLOAD_KEY_ALIAS
+                  keyPassword MYAPP_UPLOAD_KEY_PASSWORD
+                }
+              }
+            }
+
+            buildTypes {
+              release {
+                minifyEnabled false
+                proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+                signingConfig signingConfigs.debug
+              }
+            }
+          }
+
+          dependencies {
+            implementation 'com.facebook.react:react-android:+'
+            implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.1.0"
+          }
+          EOF
+          
           echo "Prebuild manual concluído."
           ls -la
 
@@ -1252,7 +1348,7 @@ jobs:
             
             # Copiar as configurações de Gradle
             echo "Copiando configurações de Gradle..."
-            cp android.gradle.properties android/
+            cp android.gradle.properties android/ || true
             
             # Verificar e corrigir problemas comuns de Gradle
             if [ -f "android/gradle.properties" ]; then
@@ -1261,24 +1357,134 @@ jobs:
               echo "org.gradle.jvmargs=-Xmx4g -XX:MaxPermSize=2048m -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
             fi
             
-            # Agora vamos tentar o build EAS
-            npx eas-cli build \
-              --platform android \
-              --profile=${{ github.event.inputs.profile || 'preview' }} \
-              --local \
-              --output=./build-output/app.apk \
-              --non-interactive
+            # Aplicar template de build.gradle personalizado se existir
+            if [ -f "android/app/build.gradle.template" ] && [ -f "android/app/build.gradle" ]; then
+              echo "Aplicando template de build.gradle personalizado..."
+              cp android/app/build.gradle.template android/app/build.gradle
+            fi
+            
+            # Verificar se precisamos ajustar o gradlew
+            if [ -f "android/gradlew" ]; then
+              echo "Corrigindo permissões do gradlew..."
+              chmod +x android/gradlew
+            fi
+            
+            # Agora vamos pular o EAS e construir diretamente com gradlew
+            echo "Construindo APK diretamente com gradlew..."
+            cd android
+            # Garantir que o gradle wrapper tenha permissão de execução
+            chmod +x ./gradlew
+            
+            # Construir o APK diretamente
+            ./gradlew assembleRelease --info
+            
+            # Verificar se o APK foi gerado
+            if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+              echo "Build com gradlew bem sucedido!"
+              mkdir -p ../build-output
+              cp app/build/outputs/apk/release/app-release.apk ../build-output/app.apk
+              cd ..
+            else
+              echo "Build com gradlew falhou."
+              cd ..
+            fi
           else
             echo "Prebuild falhou! Tentando estratégia alternativa..."
             
-            # Criar um APK básico com gradlew diretamente se o EAS falhar
+            # Criar um APK básico com outra abordagem
             echo "Instalando ferramentas Android..."
             sudo apt-get install -y --no-install-recommends openjdk-11-jdk-headless
             
-            # Criar um APK simples diretamente usando o expo
-            echo "Tentando build com expo diretamente..."
-            npx expo export --platform android
-            mkdir -p build-output
+            # Tentar exportar para um APK usando outra abordagem
+            echo "Exportando com abordagem alternativa..."
+            npm install -g sharp-cli
+            npx expo export:embed --platform android
+            
+            # Tentar gerar APK de maneira simplificada
+            mkdir -p android/app/src/main/res
+            mkdir -p android/app/src/main/java/com/managematos/cortepoda
+            
+            # Gerar um MainActivity básico
+            cat > android/app/src/main/java/com/managematos/cortepoda/MainActivity.java << 'EOF'
+            package com.managematos.cortepoda;
+            
+            import android.os.Bundle;
+            import com.facebook.react.ReactActivity;
+            import com.facebook.react.ReactActivityDelegate;
+            
+            public class MainActivity extends ReactActivity {
+                @Override
+                protected String getMainComponentName() {
+                    return "CorteMatos";
+                }
+                
+                @Override
+                protected void onCreate(Bundle savedInstanceState) {
+                    super.onCreate(savedInstanceState);
+                }
+            }
+            EOF
+            
+            # Criar build.gradle na raiz do projeto
+            cat > android/build.gradle << 'EOF'
+            buildscript {
+                ext {
+                    buildToolsVersion = "33.0.0"
+                    minSdkVersion = 21
+                    compileSdkVersion = 33
+                    targetSdkVersion = 33
+                }
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+                dependencies {
+                    classpath("com.android.tools.build:gradle:7.3.1")
+                }
+            }
+            
+            allprojects {
+                repositories {
+                    google()
+                    mavenCentral()
+                }
+            }
+            EOF
+            
+            # Gerar um AndroidManifest.xml básico
+            cat > android/app/src/main/AndroidManifest.xml << 'EOF'
+            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application
+                android:name=".MainApplication"
+                android:label="Corte de Matos"
+                android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher_round"
+                android:allowBackup="false"
+                android:theme="@style/AppTheme">
+                <activity
+                  android:name=".MainActivity"
+                  android:label="Corte de Matos"
+                  android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+                  android:launchMode="singleTask"
+                  android:windowSoftInputMode="adjustResize"
+                  android:exported="true">
+                  <intent-filter>
+                    <action android:name="android.intent.action.MAIN" />
+                    <category android:name="android.intent.category.LAUNCHER" />
+                  </intent-filter>
+                </activity>
+              </application>
+            </manifest>
+            EOF
+            
+            # Tentar build básico
+            cd android
+            if [ -f "./gradlew" ]; then
+              chmod +x ./gradlew
+              ./gradlew assembleRelease --stacktrace
+            fi
+            cd ..
             
             # Se o export funcionar, tentar construir com gradlew diretamente
             if [ -d "android" ]; then
