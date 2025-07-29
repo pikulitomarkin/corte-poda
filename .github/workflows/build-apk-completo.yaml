@@ -35,14 +35,944 @@ jobs:
 
       - name: 📦 Install dependencies
         run: |
-          echo "📦 Instalando dependências..."
+          echo "📦 Instalando dependências do zero..."
+          # Remover diretórios que podem conter informações de cache
+          rm -rf node_modules package-lock.json yarn.lock
+          # Criar novo package.json para o build
+          cat > package.json << 'EOF'
+          {
+            "name": "corte-matos-app",
+            "version": "1.1.0",
+            "main": "App.js",
+            "scripts": {
+              "start": "expo start",
+              "android": "expo start --android",
+              "ios": "expo start --ios",
+              "web": "expo start --web"
+            },
+            "dependencies": {
+              "@react-native-async-storage/async-storage": "^1.18.2",
+              "expo": "~50.0.6",
+              "expo-constants": "~15.4.2",
+              "expo-document-picker": "~11.10.1",
+              "expo-print": "~12.8.1",
+              "expo-sharing": "~11.10.0",
+              "expo-status-bar": "~1.11.1",
+              "react": "18.2.0",
+              "react-native": "0.73.4",
+              "xlsx": "^0.18.5"
+            },
+            "devDependencies": {
+              "@babel/core": "^7.20.0"
+            },
+            "private": true
+          }
+          EOF
+          # Instalar dependências a partir do novo package.json
           npm install --legacy-peer-deps
-          npm install @react-native-async-storage/async-storage expo-document-picker expo-print expo-sharing xlsx --save
+          
+      - name: 🔧 Setup Expo CLI
+        run: |
+          echo "🔧 Instalando Expo CLI e EAS CLI..."
+          npm install -g @expo/cli@latest eas-cli@latest
 
       - name: 🔧 Setup Expo CLI
         run: |
           echo "🔧 Instalando Expo CLI e EAS CLI..."
           npm install -g @expo/cli@latest eas-cli@latest
+
+      - name: 📝 Criar App.js
+        run: |
+          cat > App.js << 'EOF'
+          import React, { useState, useEffect } from 'react';
+          import { StyleSheet, Text, View, TouchableOpacity, FlatList, Alert, Modal, TextInput, Button, ScrollView, Image } from 'react-native';
+          import * as DocumentPicker from 'expo-document-picker';
+          import * as Sharing from 'expo-sharing';
+          import * as Print from 'expo-print';
+          import { StatusBar } from 'expo-status-bar';
+          import AsyncStorage from '@react-native-async-storage/async-storage';
+          import { MaterialIcons } from '@expo/vector-icons';
+          import XLSX from 'xlsx';
+
+          // Componente de status de sincronização
+          const SyncStatus = ({ lastSync, isOnline, onSync }) => {
+            return (
+              <View style={styles.syncContainer}>
+                <Text style={styles.syncText}>
+                  Status: {isOnline ? 'Online 🟢' : 'Offline 🔴'}
+                </Text>
+                <Text style={styles.syncText}>
+                  Última sincronização: {lastSync || 'Nunca'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.syncButton, !isOnline && styles.syncButtonDisabled]}
+                  onPress={onSync}
+                  disabled={!isOnline}
+                >
+                  <Text style={styles.syncButtonText}>Sincronizar</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          };
+
+          // Componente Login
+          const LoginScreen = ({ onLogin }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleLogin = () => {
+              // Usuários permitidos (em produção, seria armazenado no servidor)
+              const users = [
+                { username: 'admin', password: 'admin123', role: 'admin' },
+                { username: 'user', password: 'user123', role: 'user' }
+              ];
+
+              const user = users.find(
+                (u) => u.username === username && u.password === password
+              );
+
+              if (user) {
+                onLogin(user);
+                setError('');
+              } else {
+                setError('Usuário ou senha inválidos');
+              }
+            };
+
+            return (
+              <View style={styles.loginContainer}>
+                <View style={styles.logoContainer}>
+                  <MaterialIcons name="nature" size={80} color="#4CAF50" />
+                  <Text style={styles.logoText}>Corte de Matos</Text>
+                </View>
+                <View style={styles.formContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Usuário"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Senha"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+                  {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                  <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
+                    <Text style={styles.loginButtonText}>Entrar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          };
+
+          export default function App() {
+            const [vaos, setVaos] = useState([]);
+            const [modalVisible, setModalVisible] = useState(false);
+            const [selectedVao, setSelectedVao] = useState(null);
+            const [user, setUser] = useState(null);
+            const [isOnline, setIsOnline] = useState(false);
+            const [lastSync, setLastSync] = useState(null);
+
+            // Carrega usuário do armazenamento local
+            useEffect(() => {
+              const loadUser = async () => {
+                try {
+                  const savedUser = await AsyncStorage.getItem('user');
+                  if (savedUser) {
+                    setUser(JSON.parse(savedUser));
+                  }
+                } catch (error) {
+                  console.error('Erro ao carregar usuário:', error);
+                }
+              };
+
+              loadUser();
+              
+              // Simulação de status online
+              const interval = setInterval(() => {
+                // Simulando conexão online/offline (70% chance de estar online)
+                setIsOnline(Math.random() > 0.3);
+              }, 10000);
+              
+              return () => clearInterval(interval);
+            }, []);
+
+            // Carrega vaos do armazenamento local
+            useEffect(() => {
+              const loadVaos = async () => {
+                try {
+                  const savedVaos = await AsyncStorage.getItem('vaos');
+                  if (savedVaos) {
+                    setVaos(JSON.parse(savedVaos));
+                  }
+                } catch (error) {
+                  console.error('Erro ao carregar vaos:', error);
+                }
+              };
+
+              loadVaos();
+            }, []);
+
+            // Salva vaos no armazenamento local
+            useEffect(() => {
+              const saveVaos = async () => {
+                try {
+                  await AsyncStorage.setItem('vaos', JSON.stringify(vaos));
+                } catch (error) {
+                  console.error('Erro ao salvar vaos:', error);
+                }
+              };
+
+              if (vaos.length > 0) {
+                saveVaos();
+              }
+            }, [vaos]);
+
+            const handleLogin = async (loggedUser) => {
+              setUser(loggedUser);
+              try {
+                await AsyncStorage.setItem('user', JSON.stringify(loggedUser));
+              } catch (error) {
+                console.error('Erro ao salvar usuário:', error);
+              }
+            };
+
+            const handleLogout = async () => {
+              setUser(null);
+              try {
+                await AsyncStorage.removeItem('user');
+              } catch (error) {
+                console.error('Erro ao remover usuário:', error);
+              }
+            };
+
+            const handleSync = () => {
+              if (!isOnline) {
+                Alert.alert("Erro", "Você está offline. Não é possível sincronizar.");
+                return;
+              }
+              
+              // Simulação de sincronização
+              Alert.alert(
+                "Sincronização",
+                "Sincronizando dados com o servidor...",
+                [{ text: "OK" }]
+              );
+              
+              const now = new Date().toLocaleString();
+              setLastSync(now);
+              
+              // Salvar data de sincronização
+              AsyncStorage.setItem('lastSync', now);
+            };
+
+            const pickExcel = async () => {
+              try {
+                const result = await DocumentPicker.getDocumentAsync({
+                  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+
+                if (result.canceled) {
+                  return;
+                }
+
+                const { uri } = result.assets[0];
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                  const data = new Uint8Array(e.target.result);
+                  const workbook = XLSX.read(data, { type: 'array' });
+                  const sheetName = workbook.SheetNames[0];
+                  const worksheet = workbook.Sheets[sheetName];
+                  const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                  // Transformando os dados do Excel
+                  const newVaos = jsonData.map((item, index) => ({
+                    id: Date.now() + index,
+                    descricao: item.Descricao || 'Sem descrição',
+                    localizacao: item.Localizacao || 'Sem localização',
+                    area: item.Area || 0,
+                    dataNecessidade: item.DataNecessidade || new Date().toISOString().split('T')[0],
+                    status: 'pendente',
+                    dataInicio: null,
+                    dataConclusao: null,
+                  }));
+
+                  setVaos([...vaos, ...newVaos]);
+                  Alert.alert('Sucesso', `${newVaos.length} vãos importados com sucesso!`);
+                };
+
+                reader.readAsArrayBuffer(blob);
+              } catch (error) {
+                console.error('Erro ao ler o arquivo:', error);
+                Alert.alert('Erro', 'Não foi possível ler o arquivo Excel.');
+              }
+            };
+
+            const openVaoDetails = (vao) => {
+              setSelectedVao(vao);
+              setModalVisible(true);
+            };
+
+            const updateVaoStatus = (id, newStatus) => {
+              const updatedVaos = vaos.map((vao) => {
+                if (vao.id === id) {
+                  if (newStatus === 'iniciado' && vao.status === 'pendente') {
+                    return { ...vao, status: newStatus, dataInicio: new Date().toISOString().split('T')[0] };
+                  } else if (newStatus === 'concluido' && (vao.status === 'pendente' || vao.status === 'iniciado')) {
+                    return { 
+                      ...vao, 
+                      status: newStatus, 
+                      dataInicio: vao.dataInicio || new Date().toISOString().split('T')[0],
+                      dataConclusao: new Date().toISOString().split('T')[0] 
+                    };
+                  }
+                }
+                return vao;
+              });
+
+              setVaos(updatedVaos);
+              setModalVisible(false);
+            };
+
+            const getStatusColor = (status) => {
+              switch (status) {
+                case 'pendente':
+                  return '#9E9E9E';
+                case 'iniciado':
+                  return '#FFC107';
+                case 'concluido':
+                  return '#4CAF50';
+                default:
+                  return '#9E9E9E';
+              }
+            };
+
+            const getStatusText = (status) => {
+              switch (status) {
+                case 'pendente':
+                  return 'Pendente';
+                case 'iniciado':
+                  return 'Iniciado';
+                case 'concluido':
+                  return 'Concluído';
+                default:
+                  return 'Desconhecido';
+              }
+            };
+
+            const isUrgent = (dataNecessidade) => {
+              const today = new Date();
+              const necessidade = new Date(dataNecessidade);
+              const diffTime = necessidade - today;
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              return diffDays <= 7 && diffDays > 0;
+            };
+
+            const isLate = (dataNecessidade) => {
+              const today = new Date();
+              const necessidade = new Date(dataNecessidade);
+              return necessidade < today;
+            };
+
+            const generateReport = async () => {
+              try {
+                const pendentes = vaos.filter(vao => vao.status === 'pendente').length;
+                const iniciados = vaos.filter(vao => vao.status === 'iniciado').length;
+                const concluidos = vaos.filter(vao => vao.status === 'concluido').length;
+                const total = vaos.length;
+                
+                const percentConcluido = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+                
+                let vaosList = '';
+                vaos.forEach(vao => {
+                  vaosList += `
+                    <tr>
+                      <td>${vao.descricao}</td>
+                      <td>${vao.localizacao}</td>
+                      <td>${vao.area}</td>
+                      <td>${vao.dataNecessidade}</td>
+                      <td style="color: ${getStatusColor(vao.status)}">${getStatusText(vao.status)}</td>
+                    </tr>
+                  `;
+                });
+
+                const html = `
+                  <html>
+                    <head>
+                      <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #4CAF50; text-align: center; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .summary { margin: 20px 0; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+                        .progress-container { height: 20px; background-color: #e0e0e0; border-radius: 10px; margin: 15px 0; }
+                        .progress-bar { height: 100%; width: ${percentConcluido}%; background-color: #4CAF50; border-radius: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #4CAF50; color: white; }
+                        tr:nth-child(even) { background-color: #f2f2f2; }
+                        .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="header">
+                        <h1>Relatório de Corte de Matos</h1>
+                        <p>Data de geração: ${new Date().toLocaleDateString()}</p>
+                      </div>
+                      
+                      <div class="summary">
+                        <h2>Resumo</h2>
+                        <p>Total de vãos: ${total}</p>
+                        <p>Pendentes: ${pendentes}</p>
+                        <p>Iniciados: ${iniciados}</p>
+                        <p>Concluídos: ${concluidos}</p>
+                        
+                        <h3>Progresso: ${percentConcluido}%</h3>
+                        <div class="progress-container">
+                          <div class="progress-bar"></div>
+                        </div>
+                      </div>
+                      
+                      <h2>Detalhes dos Vãos</h2>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Descrição</th>
+                            <th>Localização</th>
+                            <th>Área</th>
+                            <th>Data Necessidade</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${vaosList}
+                        </tbody>
+                      </table>
+                      
+                      <div class="footer">
+                        <p>Aplicativo de Controle de Corte de Matos - v1.1.0</p>
+                      </div>
+                    </body>
+                  </html>
+                `;
+
+                const { uri } = await Print.printToFileAsync({ html });
+                
+                if (await Sharing.isAvailableAsync()) {
+                  await Sharing.shareAsync(uri);
+                } else {
+                  Alert.alert(
+                    'Erro',
+                    'Compartilhamento não está disponível neste dispositivo'
+                  );
+                }
+              } catch (error) {
+                console.error('Erro ao gerar relatório:', error);
+                Alert.alert('Erro', 'Não foi possível gerar o relatório.');
+              }
+            };
+
+            if (!user) {
+              return <LoginScreen onLogin={handleLogin} />;
+            }
+
+            return (
+              <View style={styles.container}>
+                <View style={styles.header}>
+                  <Text style={styles.title}>Corte de Matos</Text>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userText}>
+                      {user.username} ({user.role === 'admin' ? 'Admin' : 'Usuário'})
+                    </Text>
+                    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                      <MaterialIcons name="exit-to-app" size={24} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <SyncStatus 
+                  isOnline={isOnline} 
+                  lastSync={lastSync} 
+                  onSync={handleSync} 
+                />
+
+                <View style={styles.actions}>
+                  {user.role === 'admin' && (
+                    <TouchableOpacity style={styles.button} onPress={pickExcel}>
+                      <MaterialIcons name="file-upload" size={24} color="white" />
+                      <Text style={styles.buttonText}>Importar Excel</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  <TouchableOpacity style={styles.button} onPress={generateReport}>
+                    <MaterialIcons name="description" size={24} color="white" />
+                    <Text style={styles.buttonText}>Gerar Relatório</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.sectionTitle}>Lista de Vãos ({vaos.length})</Text>
+                
+                {vaos.length > 0 ? (
+                  <FlatList
+                    data={vaos}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.vaoItem,
+                          { borderLeftColor: getStatusColor(item.status) }
+                        ]}
+                        onPress={() => openVaoDetails(item)}
+                      >
+                        <View style={styles.vaoHeader}>
+                          <Text style={styles.vaoTitle}>{item.descricao}</Text>
+                          <View style={styles.vaoStatusContainer}>
+                            {isUrgent(item.dataNecessidade) && !isLate(item.dataNecessidade) && (
+                              <Text style={styles.urgentIcon}>🕐</Text>
+                            )}
+                            {isLate(item.dataNecessidade) && item.status !== 'concluido' && (
+                              <Text style={styles.lateIcon}>⚠️</Text>
+                            )}
+                            <View 
+                              style={[
+                                styles.vaoStatusBadge, 
+                                { backgroundColor: getStatusColor(item.status) }
+                              ]}
+                            >
+                              <Text style={styles.vaoStatusText}>{getStatusText(item.status)}</Text>
+                            </View>
+                          </View>
+                        </View>
+                        
+                        <Text style={styles.vaoLocation}>{item.localizacao}</Text>
+                        <Text style={styles.vaoArea}>Área: {item.area}m²</Text>
+                        <Text style={[
+                          styles.vaoDate,
+                          isLate(item.dataNecessidade) && item.status !== 'concluido' ? styles.lateDate : null,
+                          isUrgent(item.dataNecessidade) && !isLate(item.dataNecessidade) ? styles.urgentDate : null
+                        ]}>
+                          Data necessidade: {item.dataNecessidade}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="nature" size={80} color="#e0e0e0" />
+                    <Text style={styles.emptyText}>Nenhum vão cadastrado</Text>
+                    {user.role === 'admin' ? (
+                      <Text style={styles.emptySubText}>Importe um arquivo Excel para começar</Text>
+                    ) : (
+                      <Text style={styles.emptySubText}>Aguarde o administrador importar os dados</Text>
+                    )}
+                  </View>
+                )}
+
+                <Modal
+                  animationType="slide"
+                  transparent={true}
+                  visible={modalVisible}
+                  onRequestClose={() => setModalVisible(false)}
+                >
+                  <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                      {selectedVao && (
+                        <>
+                          <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>{selectedVao.descricao}</Text>
+                            <TouchableOpacity 
+                              style={styles.closeButton} 
+                              onPress={() => setModalVisible(false)}
+                            >
+                              <MaterialIcons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                          </View>
+                          
+                          <ScrollView style={styles.modalBody}>
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Localização:</Text>
+                              <Text style={styles.modalValue}>{selectedVao.localizacao}</Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Área:</Text>
+                              <Text style={styles.modalValue}>{selectedVao.area}m²</Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Data de necessidade:</Text>
+                              <Text style={[
+                                styles.modalValue,
+                                isLate(selectedVao.dataNecessidade) && selectedVao.status !== 'concluido' ? styles.lateDate : null
+                              ]}>
+                                {selectedVao.dataNecessidade}
+                                {isLate(selectedVao.dataNecessidade) && selectedVao.status !== 'concluido' && ' ⚠️ ATRASADO'}
+                              </Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Status atual:</Text>
+                              <View style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(selectedVao.status) }
+                              ]}>
+                                <Text style={styles.statusBadgeText}>{getStatusText(selectedVao.status)}</Text>
+                              </View>
+                            </View>
+                            
+                            {selectedVao.dataInicio && (
+                              <View style={styles.modalSection}>
+                                <Text style={styles.modalLabel}>Data de início:</Text>
+                                <Text style={styles.modalValue}>{selectedVao.dataInicio}</Text>
+                              </View>
+                            )}
+                            
+                            {selectedVao.dataConclusao && (
+                              <View style={styles.modalSection}>
+                                <Text style={styles.modalLabel}>Data de conclusão:</Text>
+                                <Text style={styles.modalValue}>{selectedVao.dataConclusao}</Text>
+                              </View>
+                            )}
+                          </ScrollView>
+                          
+                          <View style={styles.modalActions}>
+                            {selectedVao.status === 'pendente' && (
+                              <>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.startButton]}
+                                  onPress={() => updateVaoStatus(selectedVao.id, 'iniciado')}
+                                >
+                                  <MaterialIcons name="play-arrow" size={18} color="white" />
+                                  <Text style={styles.actionButtonText}>Iniciar</Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.completeButton]}
+                                  onPress={() => updateVaoStatus(selectedVao.id, 'concluido')}
+                                >
+                                  <MaterialIcons name="check" size={18} color="white" />
+                                  <Text style={styles.actionButtonText}>Concluir</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                            
+                            {selectedVao.status === 'iniciado' && (
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.completeButton]}
+                                onPress={() => updateVaoStatus(selectedVao.id, 'concluido')}
+                              >
+                                <MaterialIcons name="check" size={18} color="white" />
+                                <Text style={styles.actionButtonText}>Concluir</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </Modal>
+
+                <StatusBar style="auto" />
+              </View>
+            );
+          }
+
+          const styles = StyleSheet.create({
+            container: {
+              flex: 1,
+              backgroundColor: '#f5f5f5',
+            },
+            header: {
+              backgroundColor: '#4CAF50',
+              padding: 16,
+              paddingTop: 50,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            },
+            title: {
+              color: 'white',
+              fontSize: 20,
+              fontWeight: 'bold',
+            },
+            userInfo: {
+              flexDirection: 'row',
+              alignItems: 'center',
+            },
+            userText: {
+              color: 'white',
+              marginRight: 8,
+            },
+            logoutButton: {
+              padding: 5,
+            },
+            actions: {
+              flexDirection: 'row',
+              padding: 16,
+              justifyContent: 'space-around',
+            },
+            button: {
+              backgroundColor: '#4CAF50',
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: 10,
+              borderRadius: 5,
+              minWidth: 150,
+              justifyContent: 'center',
+            },
+            buttonText: {
+              color: 'white',
+              marginLeft: 8,
+            },
+            sectionTitle: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              margin: 16,
+              marginBottom: 8,
+            },
+            vaoItem: {
+              backgroundColor: 'white',
+              padding: 16,
+              marginHorizontal: 16,
+              marginBottom: 8,
+              borderRadius: 5,
+              borderLeftWidth: 5,
+              elevation: 2,
+            },
+            vaoHeader: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 5,
+            },
+            vaoTitle: {
+              fontSize: 16,
+              fontWeight: 'bold',
+              flex: 1,
+            },
+            vaoStatusContainer: {
+              flexDirection: 'row',
+              alignItems: 'center',
+            },
+            vaoStatusBadge: {
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 10,
+            },
+            vaoStatusText: {
+              color: 'white',
+              fontSize: 12,
+            },
+            vaoLocation: {
+              color: '#555',
+              marginBottom: 5,
+            },
+            vaoArea: {
+              color: '#555',
+              marginBottom: 5,
+            },
+            vaoDate: {
+              color: '#555',
+            },
+            lateDate: {
+              color: '#d32f2f',
+              fontWeight: 'bold',
+            },
+            urgentDate: {
+              color: '#ff9800',
+              fontWeight: 'bold',
+            },
+            urgentIcon: {
+              marginRight: 5,
+              fontSize: 16,
+            },
+            lateIcon: {
+              marginRight: 5,
+              fontSize: 16,
+            },
+            emptyContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            },
+            emptyText: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#9e9e9e',
+              marginTop: 10,
+            },
+            emptySubText: {
+              color: '#9e9e9e',
+              textAlign: 'center',
+              marginTop: 5,
+            },
+            modalContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            },
+            modalContent: {
+              backgroundColor: 'white',
+              width: '90%',
+              borderRadius: 10,
+              overflow: 'hidden',
+              maxHeight: '80%',
+            },
+            modalHeader: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 16,
+              backgroundColor: '#f5f5f5',
+              borderBottomWidth: 1,
+              borderBottomColor: '#e0e0e0',
+            },
+            modalTitle: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              flex: 1,
+            },
+            closeButton: {
+              padding: 5,
+            },
+            modalBody: {
+              padding: 16,
+              maxHeight: 300,
+            },
+            modalSection: {
+              marginBottom: 12,
+            },
+            modalLabel: {
+              color: '#666',
+              fontSize: 14,
+              marginBottom: 2,
+            },
+            modalValue: {
+              fontSize: 16,
+            },
+            statusBadge: {
+              alignSelf: 'flex-start',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 15,
+              marginTop: 2,
+            },
+            statusBadgeText: {
+              color: 'white',
+              fontWeight: 'bold',
+            },
+            modalActions: {
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              padding: 16,
+              borderTopWidth: 1,
+              borderTopColor: '#e0e0e0',
+            },
+            actionButton: {
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 5,
+              marginLeft: 8,
+            },
+            actionButtonText: {
+              color: 'white',
+              marginLeft: 5,
+              fontWeight: 'bold',
+            },
+            startButton: {
+              backgroundColor: '#FFC107',
+            },
+            completeButton: {
+              backgroundColor: '#4CAF50',
+            },
+            // Login styles
+            loginContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: '#f5f5f5',
+              padding: 20,
+            },
+            logoContainer: {
+              alignItems: 'center',
+              marginBottom: 40,
+            },
+            logoText: {
+              fontSize: 28,
+              fontWeight: 'bold',
+              color: '#4CAF50',
+              marginTop: 10,
+            },
+            formContainer: {
+              width: '100%',
+              maxWidth: 300,
+            },
+            input: {
+              backgroundColor: 'white',
+              padding: 15,
+              borderRadius: 5,
+              marginBottom: 15,
+              borderWidth: 1,
+              borderColor: '#ddd',
+            },
+            errorText: {
+              color: 'red',
+              marginBottom: 15,
+              textAlign: 'center',
+            },
+            loginButton: {
+              backgroundColor: '#4CAF50',
+              padding: 15,
+              borderRadius: 5,
+              alignItems: 'center',
+            },
+            loginButtonText: {
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: 16,
+            },
+            // Sync styles
+            syncContainer: {
+              backgroundColor: '#e8f5e9',
+              padding: 10,
+              margin: 16,
+              borderRadius: 5,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            },
+            syncText: {
+              fontSize: 12,
+              color: '#2e7d32',
+              marginRight: 5,
+            },
+            syncButton: {
+              backgroundColor: '#4CAF50',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 15,
+            },
+            syncButtonDisabled: {
+              backgroundColor: '#9E9E9E',
+            },
+            syncButtonText: {
+              color: 'white',
+              fontSize: 12,
+            },
+          });
+          EOF
 
       - name: 🔐 Authenticate with Expo
         run: |
