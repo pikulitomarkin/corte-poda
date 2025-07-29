@@ -13,8 +13,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Image,
-  NetInfo,
-  StatusBar
+  LogBox
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
@@ -28,7 +27,11 @@ import XLSX from 'xlsx';
 
 import LoginScreen from './components/LoginScreen';
 import SyncStatus from './components/SyncStatus';
+import ErrorBoundary from './components/ErrorBoundary';
 import { StorageService, SyncService } from './services/StorageService';
+
+// Ignorar avisos específicos para SDK 29
+LogBox.ignoreLogs(['Require cycle:', 'AsyncStorage has been extracted']);
 
 // Usuários pré-definidos
 const USUARIOS = {
@@ -37,6 +40,8 @@ const USUARIOS = {
 };
 
 export default function App() {
+  // Estado para controle de inicialização
+  const [isInitialized, setIsInitialized] = useState(false);
   const [user, setUser] = useState(null);
   const [matos, setMatos] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
@@ -351,17 +356,40 @@ export default function App() {
   
   // Usuário logado - mostrar interface principal
   const stats = contarStatus();
+  // Verificar se todos os componentes estão inicializados
+  useEffect(() => {
+    try {
+      // Verificar se todos os módulos necessários estão disponíveis
+      if (Platform && 
+          AsyncStorage && 
+          DocumentPicker && 
+          FileSystem && 
+          Print && 
+          Sharing && 
+          XLSX) {
+        setIsInitialized(true);
+      }
+    } catch (error) {
+      console.error("Erro na inicialização:", error);
+      Alert.alert(
+        "Erro na Inicialização",
+        "Houve um problema ao inicializar o aplicativo. Por favor, reinicie o aplicativo."
+      );
+    }
+  }, []);
   
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" backgroundColor="#2E7D32" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>🌿 Corte de Matos</Text>
-          <Text style={styles.subtitle}>
-            Olá, {usuario.username} ({usuario.tipo === 'admin' ? 'Administrador' : 'Operador'})
+    <ErrorBoundary>
+      {isInitialized ? (
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" backgroundColor="#2E7D32" />
+          
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.title}>🌿 Corte de Matos</Text>
+              <Text style={styles.subtitle}>
+                Olá, {usuario.username} ({usuario.tipo === 'admin' ? 'Administrador' : 'Operador'}))
           </Text>
         </View>
         
@@ -553,6 +581,13 @@ export default function App() {
         </Text>
       </View>
     </SafeAreaView>
+      ) : (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2E7D32" />
+          <Text style={styles.loadingText}>Inicializando aplicativo...</Text>
+        </View>
+      )}
+    </ErrorBoundary>
   );
 }
 
@@ -560,6 +595,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#555'
   },
   // Loading
   loadingContainer: {
