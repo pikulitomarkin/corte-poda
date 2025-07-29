@@ -1,6 +1,23 @@
-import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  Alert,
+  ScrollView,
+  Modal,
+  TextInput,
+  Platform,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Image,
+  NetInfo,
+  StatusBar
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StatusBar } from 'expo-status-bar';
 import { Button, ListItem, Header, Badge } from 'react-native-elements';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,15 +30,34 @@ import LoginScreen from './components/LoginScreen';
 import SyncStatus from './components/SyncStatus';
 import { StorageService, SyncService } from './services/StorageService';
 
+// Usuários pré-definidos
+const USUARIOS = {
+  'usuario': { senha: 'esul1234', tipo: 'usuario' },
+  'admin': { senha: 'eletro1234', tipo: 'admin' }
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [matos, setMatos] = useState([]);
   const [totalItems, setTotalItems] = useState(0);
   const [completedItems, setCompletedItems] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Estados para autenticação
+  const [logado, setLogado] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+  const [usuario, setUsuario] = useState(null);
+  const [username, setUsername] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erroLogin, setErroLogin] = useState('');
+  
+  // Estado para sincronização
+  const [sincronizando, setSincronizando] = useState(false);
+  const [conectado, setConectado] = useState(true);
+  const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null);
 
   useEffect(() => {
-    initializeApp();
+    verificarLogin();
   }, []);
 
   useEffect(() => {
@@ -30,464 +66,493 @@ export default function App() {
     setTotalItems(matos.length);
   }, [matos]);
 
-  const initializeApp = async () => {
+  // Verificar login existente
+  const verificarLogin = async () => {
     try {
-      const savedUser = await StorageService.loadUserData();
-      if (savedUser) {
-        setUser(savedUser);
-        await loadMatosData();
+      const usuarioSalvo = await AsyncStorage.getItem('usuario');
+      if (usuarioSalvo) {
+        const dadosUsuario = JSON.parse(usuarioSalvo);
+        setUsuario(dadosUsuario);
+        setLogado(true);
+        carregarDados();
       }
-    } catch (error) {
-      console.error('Erro ao inicializar app:', error);
+    } catch (erro) {
+      console.log('Erro ao verificar login:', erro);
     } finally {
-      setIsLoading(false);
+      setCarregando(false);
     }
   };
 
-  const loadMatosData = async () => {
+  // Carregar dados locais
+  const carregarDados = async () => {
     try {
-      const data = await StorageService.loadMatosData();
-      setMatos(data);
-    } catch (error) {
-      console.error('Erro ao carregar dados:', error);
-    }
-  };
-
-  const handleLogin = async (userData) => {
-    setUser(userData);
-    await StorageService.saveUserData(userData);
-    await loadMatosData();
-    
-    if (userData.role === 'user') {
-      setTimeout(() => {
-        handleAutoSync(userData);
-      }, 1000);
-    }
-  };
-
-  const handleLogout = async () => {
-    Alert.alert(
-      'Sair',
-      'Deseja realmente sair do aplicativo?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          onPress: async () => {
-            await StorageService.saveUserData(null);
-            setUser(null);
-            setMatos([]);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleAutoSync = async (userData) => {
-    try {
-      const isOnline = await SyncService.isConnected();
-      if (isOnline) {
-        const localData = await StorageService.loadMatosData();
-        const pendingChanges = await StorageService.loadPendingChanges();
-        
-        const result = await SyncService.syncWithServer(localData, pendingChanges, userData.role);
-        if (result.success && result.data) {
-          setMatos(result.data);
-        }
+      const dadosSalvos = await AsyncStorage.getItem('vaos');
+      if (dadosSalvos) {
+        setMatos(JSON.parse(dadosSalvos));
+      } else {
+        // Adicionar um vão de exemplo se não houver dados
+        adicionarVaoExemplo();
       }
-    } catch (error) {
-      console.error('Erro na sincronização automática:', error);
+    } catch (erro) {
+      console.log('Erro ao carregar dados:', erro);
+      adicionarVaoExemplo();
     }
   };
 
-  const importarPlanilha = async () => {
-    if (user?.role !== 'admin') {
-      Alert.alert('Acesso Negado', 'Apenas administradores podem importar planilhas.');
+  // Salvar dados localmente
+  const salvarDados = async (dadosVaos) => {
+    try {
+      await AsyncStorage.setItem('vaos', JSON.stringify(dadosVaos));
+    } catch (erro) {
+      console.log('Erro ao salvar dados:', erro);
+    }
+  };
+
+  // Login de usuário
+  const fazerLogin = () => {
+    setErroLogin('');
+    
+    if (!username.trim() || !senha.trim()) {
+      setErroLogin('Preencha todos os campos');
       return;
     }
-
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const fileUri = result.assets[0].uri;
-        const fileContent = await FileSystem.readAsStringAsync(fileUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        const workbook = XLSX.read(fileContent, { type: 'base64' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(worksheet);
-
-        const matosData = data.map((row, index) => ({
-          id: Date.now() + index,
-          descricao: row.Descricao || row.descricao || '',
-          localizacao: row.Localizacao || row.localizacao || '',
-          area: row.Area || row.area || '',
-          dataNecessidade: row.DataNecessidade || row.dataNecessidade || row['Data Necessidade'] || '',
-          status: 'pendente',
-          dataInicio: null,
-          dataConclusao: null,
-        }));
-
-        const novaMatos = [...matos, ...matosData];
-        setMatos(novaMatos);
-        await StorageService.saveMatosData(novaMatos);
-
-        Alert.alert('Sucesso', `${matosData.length} itens importados com sucesso!`);
-      }
-    } catch (error) {
-      console.error('Erro ao importar planilha:', error);
-      Alert.alert('Erro', 'Falha ao importar planilha. Verifique o formato do arquivo.');
-    }
-  };
-
-  const iniciarItem = async (id) => {
-    const updatedMatos = matos.map(item => 
-      item.id === id 
-        ? { ...item, status: 'iniciado', dataInicio: new Date().toISOString() }
-        : item
-    );
-    setMatos(updatedMatos);
-    await StorageService.saveMatosData(updatedMatos);
-    await StorageService.savePendingChange({ type: 'update', id, status: 'iniciado', dataInicio: new Date().toISOString() });
-  };
-
-  const finalizarItem = async (id) => {
-    const updatedMatos = matos.map(item => 
-      item.id === id 
-        ? { ...item, status: 'concluido', dataConclusao: new Date().toISOString() }
-        : item
-    );
-    setMatos(updatedMatos);
-    await StorageService.saveMatosData(updatedMatos);
-    await StorageService.savePendingChange({ type: 'update', id, status: 'concluido', dataConclusao: new Date().toISOString() });
-  };
-
-  const gerarRelatorio = async () => {
-    const agora = new Date();
-    const pendentes = matos.filter(item => item.status === 'pendente').length;
-    const iniciados = matos.filter(item => item.status === 'iniciado').length;
-    const concluidos = matos.filter(item => item.status === 'concluido').length;
     
-    const urgentes = matos.filter(item => 
-      item.status !== 'concluido' && isDataProxima(item.dataNecessidade)
-    ).length;
+    const usuarioEncontrado = USUARIOS[username];
     
-    const atrasados = matos.filter(item => 
-      item.status !== 'concluido' && isDataAtrasada(item.dataNecessidade)
-    ).length;
-
-    const htmlContent = `
-      <html>
-        <head>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; color: #2e7d32; margin-bottom: 30px; }
-            .summary { background-color: #e8f5e8; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            .alerts { background-color: #fff3e0; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #ff9800; }
-            .item { border: 1px solid #ddd; margin: 10px 0; padding: 15px; border-radius: 8px; }
-            .item.atrasado { border-left: 4px solid #f44336; background-color: #ffebee; }
-            .item.urgente { border-left: 4px solid #ff9800; background-color: #fff8e1; }
-            .item.pendente { border-left: 4px solid #757575; }
-            .item.iniciado { border-left: 4px solid #ffeb3b; }
-            .item.concluido { border-left: 4px solid #4caf50; }
-            .status { font-weight: bold; padding: 4px 8px; border-radius: 4px; color: white; }
-            .status.pendente { background-color: #757575; }
-            .status.iniciado { background-color: #ffeb3b; color: black; }
-            .status.concluido { background-color: #4caf50; }
-            .meta-info { font-size: 12px; color: #666; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Relatório de Corte de Matos</h1>
-            <p>Gerado em: ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR')}</p>
-            <p>Usuário: ${user?.username || 'N/A'} (${user?.role === 'admin' ? 'Administrador' : 'Usuário'})</p>
-          </div>
-          
-          <div class="summary">
-            <h2>Resumo Geral</h2>
-            <p><strong>Total de Vãos:</strong> ${matos.length}</p>
-            <p><strong>Pendentes:</strong> ${pendentes} | <strong>Iniciados:</strong> ${iniciados} | <strong>Concluídos:</strong> ${concluidos}</p>
-            <p><strong>Progresso:</strong> ${totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0}%</p>
-          </div>
-
-          ${(urgentes > 0 || atrasados > 0) ? `
-          <div class="alerts">
-            <h2>⚠️ Alertas de Prazo</h2>
-            ${atrasados > 0 ? `<p><strong>Atrasados:</strong> ${atrasados} itens</p>` : ''}
-            ${urgentes > 0 ? `<p><strong>Urgentes (próximos 7 dias):</strong> ${urgentes} itens</p>` : ''}
-          </div>
-          ` : ''}
-          
-          <h2>Detalhamento dos Vãos</h2>
-          ${matos.map(item => {
-            const dataProxima = isDataProxima(item.dataNecessidade);
-            const dataAtrasada = isDataAtrasada(item.dataNecessidade);
-            let alertClass = item.status;
-            
-            if (dataAtrasada && item.status !== 'concluido') {
-              alertClass = 'atrasado';
-            } else if (dataProxima && item.status !== 'concluido') {
-              alertClass = 'urgente';
-            }
-            
-            return `
-              <div class="item ${alertClass}">
-                <h3>${item.descricao}${dataAtrasada && item.status !== 'concluido' ? ' ⚠️' : ''}${dataProxima && item.status !== 'concluido' ? ' 🕐' : ''}</h3>
-                <p><strong>Localização:</strong> ${item.localizacao}</p>
-                <p><strong>Área:</strong> ${item.area}</p>
-                ${item.dataNecessidade ? `<p><strong>Data Necessária:</strong> ${formatarData(item.dataNecessidade)?.toLocaleDateString('pt-BR')}${dataAtrasada && item.status !== 'concluido' ? ' ⚠️ ATRASADO' : ''}${dataProxima && item.status !== 'concluido' ? ' 🕐 URGENTE' : ''}</p>` : ''}
-                <p><strong>Status:</strong> <span class="status ${item.status}">${getStatusText(item.status)}</span></p>
-                ${item.dataInicio ? `<p><strong>Iniciado em:</strong> ${new Date(item.dataInicio).toLocaleDateString('pt-BR')}</p>` : ''}
-                ${item.dataConclusao ? `<p><strong>Concluído em:</strong> ${new Date(item.dataConclusao).toLocaleDateString('pt-BR')}</p>` : ''}
-                <div class="meta-info">
-                  ID: ${item.id}
-                </div>
-              </div>
-            `;
-          }).join('')}
-          
-          <div class="meta-info" style="text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
-            <p>Relatório gerado pelo App de Controle de Corte de Matos</p>
-            <p>Sistema desenvolvido para controle eficiente de manutenção de áreas verdes</p>
-          </div>
-        </body>
-      </html>
-    `;
-
-    try {
-      const { uri } = await Print.printToFileAsync({
-        html: htmlContent,
-        base64: false,
-      });
-
-      Alert.alert(
-        'Relatório Gerado',
-        'Deseja compartilhar o relatório?',
-        [
-          { text: 'Não', style: 'cancel' },
-          {
-            text: 'Compartilhar',
-            onPress: async () => {
-              await Sharing.shareAsync(uri, {
-                mimeType: 'application/pdf',
-                dialogTitle: 'Compartilhar Relatório de Corte de Matos',
-              });
-            },
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('Erro ao gerar relatório:', error);
-      Alert.alert('Erro', 'Falha ao gerar relatório PDF');
+    if (!usuarioEncontrado || usuarioEncontrado.senha !== senha) {
+      setErroLogin('Usuário ou senha incorretos');
+      return;
     }
+    
+    const dadosUsuario = {
+      username: username,
+      tipo: usuarioEncontrado.tipo
+    };
+    
+    setUsuario(dadosUsuario);
+    AsyncStorage.setItem('usuario', JSON.stringify(dadosUsuario));
+    setLogado(true);
+    carregarDados();
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pendente': return '#757575';
-      case 'iniciado': return '#ffeb3b';
-      case 'concluido': return '#4caf50';
-      default: return '#757575';
-    }
+  // Logout
+  const fazerLogout = async () => {
+    await AsyncStorage.removeItem('usuario');
+    setUsuario(null);
+    setLogado(false);
+    setSenha('');
+    setUsername('');
   };
 
-  const getStatusText = (status) => {
-    switch (status) {
-      case 'pendente': return 'PENDENTE';
-      case 'iniciado': return 'INICIADO';
-      case 'concluido': return 'CONCLUÍDO';
-      default: return 'INDEFINIDO';
+  // Função para sincronizar dados
+  const sincronizarDados = async () => {
+    if (!conectado) {
+      Alert.alert('Sem conexão', 'Você precisa estar conectado à internet para sincronizar.');
+      return;
     }
-  };
-
-  const formatarData = (dataString) => {
-    if (!dataString) return null;
+    
+    setSincronizando(true);
     
     try {
-      if (dataString instanceof Date) {
-        return dataString;
-      }
+      // Simulando uma chamada de API para sincronização
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      if (typeof dataString === 'string' && dataString.includes('/')) {
-        const [dia, mes, ano] = dataString.split('/');
-        return new Date(ano, mes - 1, dia);
-      }
+      // Em uma aplicação real, aqui você faria uma chamada para sua API
+      // para enviar os dados atualizados e receber os dados do servidor
       
-      return new Date(dataString);
-    } catch (error) {
-      return null;
+      const agora = new Date().toLocaleString();
+      setUltimaSincronizacao(agora);
+      await AsyncStorage.setItem('ultimaSincronizacao', agora);
+      
+      Alert.alert('Sucesso', 'Dados sincronizados com sucesso!');
+    } catch (erro) {
+      Alert.alert('Erro', 'Erro ao sincronizar dados. Tente novamente.');
+      console.log('Erro na sincronização:', erro);
+    } finally {
+      setSincronizando(false);
     }
   };
 
-  const isDataProxima = (dataNecessidade) => {
-    if (!dataNecessidade) return false;
-    const data = formatarData(dataNecessidade);
-    if (!data) return false;
+  // Verificar conectividade
+  useEffect(() => {
+    // Carregar última data de sincronização
+    AsyncStorage.getItem('ultimaSincronizacao').then(data => {
+      if (data) setUltimaSincronizacao(data);
+    });
     
-    const hoje = new Date();
-    const diffDias = Math.ceil((data - hoje) / (1000 * 60 * 60 * 24));
+    // Em um app real, usaria NetInfo para monitorar conectividade
+    // Simulando com uma função simples aqui
+    const verificarConexao = () => {
+      // Simular uma conexão aleatória para demonstração
+      const temConexao = Math.random() > 0.2; // 80% de chance de estar conectado
+      setConectado(temConexao);
+    };
     
-    return diffDias <= 7 && diffDias >= 0;
-  };
+    verificarConexao();
+    const intervalo = setInterval(verificarConexao, 30000);
+    
+    return () => clearInterval(intervalo);
+  }, []);
 
-  const isDataAtrasada = (dataNecessidade) => {
-    if (!dataNecessidade) return false;
-    const data = formatarData(dataNecessidade);
-    if (!data) return false;
-    
-    const hoje = new Date();
-    return data < hoje;
+  const adicionarVaoExemplo = () => {
+    const exemplo = {
+      id: Date.now(),
+      descricao: 'Corte Vão Principal - Linha A',
+      localizacao: 'Setor Norte - KM 15',
+      area: '150m²',
+      dataNecessidade: '2025-02-15',
+      status: 'pendente',
+      dataInicio: null,
+      dataConclusao: null,
+      atualizadoPor: null
+    };
+    const novosVaos = [exemplo];
+    setMatos(novosVaos);
+    salvarDados(novosVaos);
   };
-
-  if (isLoading) {
+  
+  const adicionarVao = () => {
+    if (!novoVao.descricao.trim()) {
+      Alert.alert('Erro', 'Descrição é obrigatória');
+      return;
+    }
+    
+    const vao = {
+      id: Date.now(),
+      ...novoVao,
+      status: 'pendente',
+      dataInicio: null,
+      dataConclusao: null,
+      atualizadoPor: null
+    };
+    
+    const novosVaos = [...matos, vao];
+    setMatos(novosVaos);
+    salvarDados(novosVaos);
+    setNovoVao({ descricao: '', localizacao: '', area: '', dataNecessidade: '' });
+    setModalVisible(false);
+    Alert.alert('Sucesso', 'Vão adicionado com sucesso!');
+  };
+  
+  const alterarStatus = (id, novoStatus) => {
+    const novosVaos = matos.map(vao => {
+      if (vao.id === id) {
+        const agora = new Date().toISOString().split('T')[0];
+        return {
+          ...vao,
+          status: novoStatus,
+          dataInicio: novoStatus === 'iniciado' ? agora : vao.dataInicio,
+          dataConclusao: novoStatus === 'concluido' ? agora : null,
+          atualizadoPor: usuario.username
+        };
+      }
+      return vao;
+    });
+    
+    setMatos(novosVaos);
+    salvarDados(novosVaos);
+  };
+  
+  const getCorStatus = (status) => {
+    switch(status) {
+      case 'pendente': return '#9E9E9E';
+      case 'iniciado': return '#FF9800';
+      case 'concluido': return '#4CAF50';
+      default: return '#9E9E9E';
+    }
+  };
+  
+  const getStatusIcon = (vao) => {
+    const hoje = new Date();
+    const dataNecessidade = new Date(vao.dataNecessidade);
+    const diasRestantes = Math.ceil((dataNecessidade - hoje) / (1000 * 60 * 60 * 24));
+    
+    if (vao.status === 'concluido') return '✅';
+    if (diasRestantes < 0) return '⚠️'; // Atrasado
+    if (diasRestantes <= 7) return '🕐'; // Urgente
+    return '📅'; // Normal
+  };
+  
+  const contarStatus = () => {
+    const pendentes = matos.filter(v => v.status === 'pendente').length;
+    const iniciados = matos.filter(v => v.status === 'iniciado').length;
+    const concluidos = matos.filter(v => v.status === 'concluido').length;
+    return { pendentes, iniciados, concluidos };
+  };
+  
+  // Verificar se é admin
+  const isAdmin = () => {
+    return usuario && usuario.tipo === 'admin';
+  };
+  
+  // Se estiver carregando, mostrar spinner
+  if (carregando) {
     return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Carregando...</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" backgroundColor="#2E7D32" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
-
-  if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
+  
+  // Se não estiver logado, mostrar tela de login
+  if (!logado) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" backgroundColor="#2E7D32" />
+        
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.loginContainer}
+        >
+          <View style={styles.loginHeader}>
+            <Text style={styles.loginTitle}>🌿 Corte de Matos</Text>
+            <Text style={styles.loginSubtitle}>Sistema de Gestão</Text>
+          </View>
+          
+          <View style={styles.loginForm}>
+            {erroLogin ? (
+              <Text style={styles.erroLogin}>{erroLogin}</Text>
+            ) : null}
+            
+            <TextInput
+              style={styles.loginInput}
+              placeholder="Nome de usuário"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+            
+            <TextInput
+              style={styles.loginInput}
+              placeholder="Senha"
+              value={senha}
+              onChangeText={setSenha}
+              secureTextEntry={true}
+            />
+            
+            <TouchableOpacity style={styles.loginButton} onPress={fazerLogin}>
+              <Text style={styles.loginButtonText}>Entrar</Text>
+            </TouchableOpacity>
+            
+            <View style={styles.loginInfo}>
+              <Text style={styles.loginInfoText}>
+                Use as credenciais fornecidas pelo administrador
+              </Text>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
   }
-
+  
+  // Usuário logado - mostrar interface principal
+  const stats = contarStatus();
+  
   return (
-    <View style={styles.container}>
-      <Header
-        centerComponent={{ text: 'Controle de Corte de Matos', style: { color: '#fff', fontSize: 18, fontWeight: 'bold' } }}
-        rightComponent={{
-          icon: 'logout',
-          color: '#fff',
-          onPress: handleLogout
-        }}
-        backgroundColor="#2e7d32"
-      />
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="light" backgroundColor="#2E7D32" />
       
-      <SyncStatus user={user} />
-      
-      <View style={styles.userInfo}>
-        <Text style={styles.userInfoText}>
-          👤 {user.username} ({user.role === 'admin' ? 'Administrador' : 'Usuário'})
-        </Text>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>🌿 Corte de Matos</Text>
+          <Text style={styles.subtitle}>
+            Olá, {usuario.username} ({usuario.tipo === 'admin' ? 'Administrador' : 'Operador'})
+          </Text>
+        </View>
+        
+        {/* Botão de logout */}
+        <TouchableOpacity style={styles.logoutButton} onPress={fazerLogout}>
+          <Text style={styles.logoutText}>Sair</Text>
+        </TouchableOpacity>
       </View>
       
-      <View style={styles.summary}>
-        <Text style={styles.summaryText}>
-          Progresso: {completedItems}/{totalItems} ({totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0}%)
-        </Text>
+      {/* Barra de sincronização */}
+      <View style={styles.syncBar}>
+        <View style={styles.syncStatus}>
+          <Text style={styles.syncStatusText}>
+            {conectado ? '🟢 Online' : '🔴 Offline'}
+          </Text>
+          {ultimaSincronizacao && (
+            <Text style={styles.syncTimeText}>
+              Última sincronização: {ultimaSincronizacao}
+            </Text>
+          )}
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.syncButton} 
+          onPress={sincronizarDados}
+          disabled={sincronizando}
+        >
+          {sincronizando ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <Text style={styles.syncButtonText}>🔄 Sincronizar</Text>
+          )}
+        </TouchableOpacity>
       </View>
-
-      <View style={styles.buttonContainer}>
-        {user.role === 'admin' && (
-          <Button
-            title="Importar Planilha"
-            icon={<Icon name="file-upload" size={20} color="white" style={{ marginRight: 5 }} />}
-            onPress={importarPlanilha}
-            buttonStyle={[styles.button, { backgroundColor: '#1976d2' }]}
-          />
-        )}
-        <Button
-          title="Gerar Relatório"
-          icon={<Icon name="picture-as-pdf" size={20} color="white" style={{ marginRight: 5 }} />}
-          onPress={gerarRelatorio}
-          disabled={matos.length === 0}
-          buttonStyle={[styles.button, { backgroundColor: '#d32f2f' }]}
-        />
+      
+      {/* Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statBox}>
+          <Text style={styles.statNumber}>{stats.pendentes}</Text>
+          <Text style={styles.statLabel}>Pendentes</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={[styles.statNumber, {color: '#FF9800'}]}>{stats.iniciados}</Text>
+          <Text style={styles.statLabel}>Iniciados</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={[styles.statNumber, {color: '#4CAF50'}]}>{stats.concluidos}</Text>
+          <Text style={styles.statLabel}>Concluídos</Text>
+        </View>
       </View>
-
-      <ScrollView style={styles.listContainer}>
-        {matos.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Icon name="grass" size={60} color="#ccc" />
-            <Text style={styles.emptyText}>Nenhum vão cadastrado</Text>
-            <Text style={styles.emptySubtext}>
-              {user.role === 'admin' ? 'Importe uma planilha para começar' : 'Aguarde o administrador importar dados'}
+      
+      {/* Botão Adicionar - só para admin */}
+      {isAdmin() && (
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.addButtonText}>➕ Adicionar Novo Vão</Text>
+        </TouchableOpacity>
+      )}
+      
+      {/* Lista de Vãos */}
+      <ScrollView style={styles.lista}>
+        {matos.map((vao) => (
+          <View key={vao.id} style={[styles.vaoCard, { borderLeftColor: getCorStatus(vao.status) }]}>
+            <View style={styles.vaoHeader}>
+              <Text style={styles.vaoIcon}>{getStatusIcon(vao)}</Text>
+              <Text style={styles.vaoDescricao}>{vao.descricao}</Text>
+            </View>
+            
+            <Text style={styles.vaoInfo}>📍 {vao.localizacao}</Text>
+            <Text style={styles.vaoInfo}>📏 Área: {vao.area}</Text>
+            <Text style={styles.vaoInfo}>📅 Prazo: {vao.dataNecessidade}</Text>
+            
+            <View style={styles.statusContainer}>
+              <Text style={[styles.status, { color: getCorStatus(vao.status) }]}>
+                ● {vao.status.toUpperCase()}
+              </Text>
+              
+              {vao.atualizadoPor && vao.status !== 'pendente' && (
+                <Text style={styles.updatedByText}>
+                  Atualizado por: {vao.atualizadoPor}
+                </Text>
+              )}
+            </View>
+            
+            {/* Botões de Ação */}
+            <View style={styles.actionButtons}>
+              {vao.status === 'pendente' && (
+                <TouchableOpacity 
+                  style={[styles.actionBtn, {backgroundColor: '#FF9800'}]}
+                  onPress={() => alterarStatus(vao.id, 'iniciado')}
+                >
+                  <Text style={styles.actionBtnText}>▶️ Iniciar</Text>
+                </TouchableOpacity>
+              )}
+              
+              {vao.status === 'iniciado' && (
+                <TouchableOpacity 
+                  style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}
+                  onPress={() => alterarStatus(vao.id, 'concluido')}
+                >
+                  <Text style={styles.actionBtnText}>✅ Concluir</Text>
+                </TouchableOpacity>
+              )}
+              
+              {vao.status === 'concluido' && (
+                <View style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}>
+                  <Text style={styles.actionBtnText}>✅ Finalizado</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        ))}
+        
+        {matos.length === 0 && (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>
+              🌿 Nenhum vão cadastrado{'\n'}
+              {isAdmin() ? 'Toque no botão acima para adicionar' : 'Aguarde o administrador adicionar vãos'}
             </Text>
           </View>
-        ) : (
-          matos.map((item) => {
-            const dataProxima = isDataProxima(item.dataNecessidade);
-            const dataAtrasada = isDataAtrasada(item.dataNecessidade);
-            
-            return (
-              <ListItem 
-                key={item.id} 
-                bottomDivider
-                containerStyle={[
-                  dataAtrasada && item.status !== 'concluido' && styles.itemAtrasado,
-                  dataProxima && item.status !== 'concluido' && styles.itemUrgente
-                ]}
-              >
-                <ListItem.Content>
-                  <ListItem.Title style={styles.itemTitle}>
-                    {item.descricao}
-                    {dataAtrasada && item.status !== 'concluido' && ' ⚠️'}
-                    {dataProxima && item.status !== 'concluido' && ' 🕐'}
-                  </ListItem.Title>
-                  <ListItem.Subtitle>
-                    <Text style={styles.itemSubtitle}>📍 {item.localizacao}</Text>
-                    <Text style={styles.itemSubtitle}>📐 Área: {item.area}</Text>
-                    {item.dataNecessidade && (
-                      <Text style={[
-                        styles.itemSubtitle,
-                        isDataAtrasada(item.dataNecessidade) && item.status !== 'concluido' && { color: '#f44336', fontWeight: 'bold' },
-                        isDataProxima(item.dataNecessidade) && item.status !== 'concluido' && { color: '#ff9800', fontWeight: 'bold' }
-                      ]}>
-                        📅 Necessário até: {formatarData(item.dataNecessidade)?.toLocaleDateString('pt-BR')}
-                        {isDataAtrasada(item.dataNecessidade) && item.status !== 'concluido' && ' ⚠️ ATRASADO'}
-                        {isDataProxima(item.dataNecessidade) && item.status !== 'concluido' && ' 🕐 URGENTE'}
-                      </Text>
-                    )}
-                  </ListItem.Subtitle>
-                  <View style={styles.itemActions}>
-                    <Badge
-                      value={getStatusText(item.status)}
-                      badgeStyle={[
-                        styles.statusBadge, 
-                        { 
-                          backgroundColor: getStatusColor(item.status),
-                          ...(item.status === 'iniciado' && { color: '#000' })
-                        }
-                      ]}
-                      textStyle={item.status === 'iniciado' ? { color: '#000' } : { color: '#fff' }}
-                    />
-                    <View style={styles.actionButtons}>
-                      {item.status === 'pendente' && (
-                        <Button
-                          title="Iniciar"
-                          onPress={() => iniciarItem(item.id)}
-                          buttonStyle={[styles.actionButton, { backgroundColor: '#ffeb3b' }]}
-                          titleStyle={[styles.actionButtonText, { color: '#000' }]}
-                        />
-                      )}
-                      {item.status === 'iniciado' && (
-                        <Button
-                          title="Finalizar"
-                          onPress={() => finalizarItem(item.id)}
-                          buttonStyle={[styles.actionButton, { backgroundColor: '#4caf50' }]}
-                          titleStyle={styles.actionButtonText}
-                        />
-                      )}
-                      {item.status === 'concluido' && (
-                        <Icon name="check-circle" size={24} color="#4caf50" />
-                      )}
-                    </View>
-                  </View>
-                </ListItem.Content>
-              </ListItem>
-            );
-          })
         )}
       </ScrollView>
-
-      <StatusBar style="auto" />
-    </View>
+      
+      {/* Modal Adicionar Vão - só para admin */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Novo Vão de Corte</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Descrição do vão"
+              value={novoVao.descricao}
+              onChangeText={(text) => setNovoVao({...novoVao, descricao: text})}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Localização"
+              value={novoVao.localizacao}
+              onChangeText={(text) => setNovoVao({...novoVao, localizacao: text})}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Área (ex: 100m²)"
+              value={novoVao.area}
+              onChangeText={(text) => setNovoVao({...novoVao, area: text})}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Data necessidade (AAAA-MM-DD)"
+              value={novoVao.dataNecessidade}
+              onChangeText={(text) => setNovoVao({...novoVao, dataNecessidade: text})}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalBtn, {backgroundColor: '#f44336'}]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={styles.modalBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalBtn, {backgroundColor: '#4CAF50'}]}
+                onPress={adicionarVao}
+              >
+                <Text style={styles.modalBtnText}>Adicionar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Footer */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Corte de Matos v1.1 - Total: {matos.length} vãos
+          {isAdmin() ? ' | Modo Admin' : ''}
+        </Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -496,108 +561,311 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  centerContent: {
+  // Loading
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 18,
+    marginTop: 10,
+    fontSize: 16,
     color: '#666',
   },
-  userInfo: {
-    backgroundColor: '#e3f2fd',
-    padding: 10,
-    alignItems: 'center',
-  },
-  userInfoText: {
-    fontSize: 14,
-    color: '#1976d2',
-    fontWeight: 'bold',
-  },
-  summary: {
-    backgroundColor: '#e8f5e8',
-    padding: 15,
-    alignItems: 'center',
-  },
-  summaryText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#2e7d32',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 15,
-    backgroundColor: '#fff',
-  },
-  button: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  listContainer: {
-    flex: 1,
-  },
-  emptyState: {
+  // Login
+  loginContainer: {
     flex: 1,
     justifyContent: 'center',
+    padding: 20,
+  },
+  loginHeader: {
     alignItems: 'center',
-    padding: 40,
+    marginBottom: 40,
   },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginTop: 15,
+  loginTitle: {
+    fontSize: 28,
     fontWeight: 'bold',
+    color: '#2E7D32',
+    marginBottom: 10,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 5,
-    textAlign: 'center',
+  loginSubtitle: {
+    fontSize: 18,
+    color: '#555',
   },
-  itemTitle: {
+  loginForm: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  loginInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 5,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 15,
+  },
+  loginButton: {
+    backgroundColor: '#2E7D32',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  loginButtonText: {
+    color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-    marginBottom: 5,
   },
-  itemSubtitle: {
-    fontSize: 14,
+  loginInfo: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  loginInfoText: {
     color: '#666',
-    marginBottom: 2,
+    textAlign: 'center',
   },
-  itemActions: {
+  erroLogin: {
+    color: 'red',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  // Header
+  header: {
+    backgroundColor: '#2E7D32',
+    padding: 20,
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
+    ...Platform.select({
+      ios: {
+        paddingTop: 50,
+      },
+      android: {
+        paddingTop: 20,
+      },
+    }),
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: 'white',
   },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  subtitle: {
+    fontSize: 14,
+    color: '#C8E6C9',
+    marginTop: 5,
   },
-  actionButton: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
+  logoutButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    padding: 8,
+    borderRadius: 5,
   },
-  actionButtonText: {
-    fontSize: 12,
+  logoutText: {
+    color: 'white',
     fontWeight: 'bold',
   },
-  itemUrgente: {
-    backgroundColor: '#fff8e1',
-    borderLeftWidth: 4,
-    borderLeftColor: '#ff9800',
+  // Sincronização
+  syncBar: {
+    backgroundColor: '#E8F5E9',
+    flexDirection: 'row',
+    padding: 10,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
   },
-  itemAtrasado: {
-    backgroundColor: '#ffebee',
-    borderLeftWidth: 4,
-    borderLeftColor: '#f44336',
+  syncStatus: {
+    flex: 1,
+  },
+  syncStatusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  syncTimeText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  syncButton: {
+    backgroundColor: '#388E3C',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+  },
+  syncButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    margin: 15,
+    borderRadius: 10,
+    padding: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 5,
+  },
+  // Botão Adicionar
+  addButton: {
+    backgroundColor: '#4CAF50',
+    margin: 15,
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 3,
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Lista
+  lista: {
+    flex: 1,
+    paddingHorizontal: 15,
+  },
+  vaoCard: {
+    backgroundColor: 'white',
+    marginBottom: 15,
+    borderRadius: 10,
+    padding: 15,
+    borderLeftWidth: 5,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  vaoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  vaoIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  vaoDescricao: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 1,
+  },
+  vaoInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 5,
+  },
+  statusContainer: {
+    marginVertical: 10,
+  },
+  status: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  updatedByText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
+  actionButtons: {
+    marginTop: 10,
+  },
+  actionBtn: {
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 50,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    margin: 20,
+    padding: 20,
+    borderRadius: 10,
+    width: '90%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 10,
+    marginBottom: 15,
+    borderRadius: 5,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalBtn: {
+    flex: 1,
+    padding: 15,
+    marginHorizontal: 5,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  modalBtnText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  // Footer
+  footer: {
+    padding: 15,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: 'white',
+  },
+  footerText: {
+    color: '#666',
+    fontSize: 12,
   },
 });
