@@ -1,31 +1,49 @@
 {
   "cli": {
-    "version": ">= 7.8.6",
-    "appVersionSource": "local"
+    "version": ">= 7.1.0",
+    "requireCommit": false,
+    "appVersionSource": "remote"
   },
   "build": {
-    "preview": {
-      "android": {
-        "buildType": "apk",
-        "credentialsSource": "local"
-      }
-    },
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "APP_ENV": "development"
+      },
       "android": {
         "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug",
+        "credentialsSource": "local"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "APP_ENV": "preview"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
         "credentialsSource": "local"
       }
     },
     "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "APP_ENV": "production"
+      },
       "android": {
-        "buildType": "app-bundle",
-        "gradleCommand": ":app:bundleRelease",
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
         "credentialsSource": "local"
       }
     },
     "production-apk": {
+      "channel": "production",
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
