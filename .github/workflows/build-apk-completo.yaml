@@ -61,10 +61,12 @@ jobs:
               "expo-build-properties": "~0.11.1",
               "react": "18.2.0",
               "react-native": "0.73.4",
+              "react-native-elements": "^3.4.3",
               "xlsx": "^0.18.5"
             },
             "devDependencies": {
-              "@babel/core": "^7.20.0"
+              "@babel/core": "^7.20.0",
+              "babel-preset-expo": "^10.0.0"
             },
             "overrides": {
               "jimp-compact": "0.16.1"
@@ -1013,13 +1015,24 @@ jobs:
             sudo \
             git
           
-          # Configuração do ANDROID_HOME e Android SDK
+          # Definir variáveis de ambiente Android - Corrigir conflito de SDK paths
+          # Remover ANDROID_SDK_ROOT se existir
+          if [ -n "$ANDROID_SDK_ROOT" ]; then
+            echo "Limpando variável ANDROID_SDK_ROOT conflitante..."
+            unset ANDROID_SDK_ROOT
+          fi
+          
+          # Configuração do ANDROID_HOME único e consistente
           export ANDROID_HOME=$HOME/android-sdk
           mkdir -p $ANDROID_HOME
           
-          # Definir variáveis de ambiente para comandos EAS
+          # Adicionar ao GITHUB_ENV para persistir em todos os passos
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+          
+          # Remover qualquer referência ao ANDROID_SDK_ROOT nas variáveis de ambiente
+          echo "Garantindo que apenas ANDROID_HOME seja usado..."
+          sudo rm -f /etc/environment.d/*android*.conf || true
           
           # Instalar Android build tools necessários para o EAS
           sudo npm install -g turtle-cli --unsafe-perm
@@ -1134,6 +1147,19 @@ jobs:
           module.exports = defaultConfig;
           EOF
           
+          # Criar arquivo gradle.properties personalizado para corrigir o erro do SoftwareComponent
+          mkdir -p android
+          cat > android/gradle.properties << 'EOF'
+          # Project-wide Gradle settings
+          org.gradle.jvmargs=-Xmx2048m -XX:MaxPermSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.nonTransitiveRClass=true
+
+          # Solucionar erro de "SoftwareComponent named 'release' not found"
+          android.disableAutomaticComponentCreation=true
+          EOF
+          
           echo "Prebuild manual concluído."
           ls -la
 
@@ -1224,6 +1250,17 @@ jobs:
           if [ -d "android" ]; then
             echo "Prebuild bem sucedido! Prosseguindo com o build..."
             
+            # Copiar as configurações de Gradle
+            echo "Copiando configurações de Gradle..."
+            cp android.gradle.properties android/
+            
+            # Verificar e corrigir problemas comuns de Gradle
+            if [ -f "android/gradle.properties" ]; then
+              echo "Atualizando gradle.properties com configurações necessárias..."
+              echo "android.disableAutomaticComponentCreation=true" >> android/gradle.properties
+              echo "org.gradle.jvmargs=-Xmx4g -XX:MaxPermSize=2048m -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
+            fi
+            
             # Agora vamos tentar o build EAS
             npx eas-cli build \
               --platform android \
@@ -1242,6 +1279,34 @@ jobs:
             echo "Tentando build com expo diretamente..."
             npx expo export --platform android
             mkdir -p build-output
+            
+            # Se o export funcionar, tentar construir com gradlew diretamente
+            if [ -d "android" ]; then
+              echo "Export funcionou! Tentando build com gradlew..."
+              cd android
+              
+              # Garantir que o gradle wrapper tenha permissão de execução
+              chmod +x ./gradlew
+              
+              # Atualizar gradle.properties para resolver problema de SoftwareComponent
+              echo "android.disableAutomaticComponentCreation=true" >> gradle.properties
+              
+              # Tentar construir com gradlew diretamente
+              ./gradlew assembleRelease --info
+              
+              # Verificar se o APK foi gerado
+              if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+                echo "Build com gradlew bem sucedido!"
+                mkdir -p ../build-output
+                cp app/build/outputs/apk/release/app-release.apk ../build-output/app.apk
+                cd ..
+              else
+                echo "Build com gradlew falhou."
+                cd ..
+              fi
+            else
+              echo "Export falhou também."
+            fi
             cp -r dist/* build-output/
             
             echo "Build alternativo concluído!"
