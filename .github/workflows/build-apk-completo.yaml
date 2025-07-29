@@ -1074,24 +1074,22 @@ jobs:
             sudo \
             git
           
-          # Definir variáveis de ambiente Android - Corrigir conflito de SDK paths
-          # Remover ANDROID_SDK_ROOT se existir
-          if [ -n "$ANDROID_SDK_ROOT" ]; then
-            echo "Limpando variável ANDROID_SDK_ROOT conflitante..."
-            unset ANDROID_SDK_ROOT
-          fi
+          # Corrigir conflito entre ANDROID_HOME e ANDROID_SDK_ROOT
+          # Este é um problema comum que causa falha no build
+          echo "Resolvendo conflito de variáveis do Android SDK..."
           
-          # Configuração do ANDROID_HOME único e consistente
-          export ANDROID_HOME=$HOME/android-sdk
-          mkdir -p $ANDROID_HOME
+          # Unificar SDK path - usar o padrão do runner
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           
           # Adicionar ao GITHUB_ENV para persistir em todos os passos
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
           
-          # Remover qualquer referência ao ANDROID_SDK_ROOT nas variáveis de ambiente
-          echo "Garantindo que apenas ANDROID_HOME seja usado..."
-          sudo rm -f /etc/environment.d/*android*.conf || true
+          # Verificar configuração
+          echo "ANDROID_HOME = $ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT = $ANDROID_SDK_ROOT"
           
           # Instalar Android build tools necessários
           sudo npm install -g turtle-cli --unsafe-perm
