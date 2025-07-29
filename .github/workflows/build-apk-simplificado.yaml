@@ -1059,24 +1059,21 @@ jobs:
             sudo \
             git
           
-          # Definir variáveis de ambiente Android - Corrigir conflito de SDK paths
-          # Remover ANDROID_SDK_ROOT se existir
-          if [ -n "$ANDROID_SDK_ROOT" ]; then
-            echo "Limpando variável ANDROID_SDK_ROOT conflitante..."
-            unset ANDROID_SDK_ROOT
-          fi
+          # Corrigir conflito entre ANDROID_HOME e ANDROID_SDK_ROOT
+          echo "Resolvendo conflito de variáveis do Android SDK..."
           
-          # Configuração do ANDROID_HOME único e consistente
-          export ANDROID_HOME=$HOME/android-sdk
-          mkdir -p $ANDROID_HOME
+          # Unificar SDK path - usar o padrão do runner
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           
           # Adicionar ao GITHUB_ENV para persistir em todos os passos
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
           
-          # Remover qualquer referência ao ANDROID_SDK_ROOT nas variáveis de ambiente
-          echo "Garantindo que apenas ANDROID_HOME seja usado..."
-          sudo rm -f /etc/environment.d/*android*.conf || true
+          # Verificar as variáveis configuradas
+          echo "SDK Path configurado: $ANDROID_HOME"
+          ls -la $ANDROID_HOME || echo "Diretório SDK não encontrado"
           
           # Instalar Android build tools necessários
           sudo npm install -g turtle-cli --unsafe-perm
@@ -1263,6 +1260,28 @@ jobs:
         run: |
           echo "🔨 Build APK completo do Corte de Matos..."
           
+          # Verificar ambiente Android antes do build
+          echo "Verificando configuração do ambiente Android:"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          
+          # Garantir que ambas as variáveis apontem para o mesmo local
+          if [ "$ANDROID_HOME" != "$ANDROID_SDK_ROOT" ]; then
+            echo "ATENÇÃO: ANDROID_HOME e ANDROID_SDK_ROOT são diferentes."
+            echo "Corrigindo para garantir consistência..."
+            export ANDROID_SDK_ROOT=$ANDROID_HOME
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          
+          # Verificar existência do diretório
+          if [ ! -d "$ANDROID_HOME" ]; then
+            echo "AVISO: Diretório ANDROID_HOME não encontrado, usando o padrão do runner."
+            export ANDROID_HOME=/usr/local/lib/android/sdk
+            export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+            echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          
           # Criar um diretório temporário para o build
           mkdir -p build-output
           
@@ -1287,6 +1306,16 @@ jobs:
           if [ -d "android" ]; then
             echo "Prebuild bem sucedido! Prosseguindo com o build..."
             
+            # Verificar e garantir que gradle.properties tem a configuração correta
+            echo "Verificando gradle.properties para garantir configuração correta..."
+            if [ -f "android/gradle.properties" ]; then
+              # Garantir que android.disableAutomaticComponentCreation=true está presente
+              if ! grep -q "android.disableAutomaticComponentCreation=true" android/gradle.properties; then
+                echo "Adicionando android.disableAutomaticComponentCreation=true ao gradle.properties"
+                echo "android.disableAutomaticComponentCreation=true" >> android/gradle.properties
+              fi
+            fi
+            
             # Aplicar template de build.gradle personalizado se existir
             if [ -f "android/app/build.gradle.template" ] && [ -f "android/app/build.gradle" ]; then
               echo "Aplicando template de build.gradle personalizado..."
@@ -1305,8 +1334,15 @@ jobs:
             # Garantir que o gradle wrapper tenha permissão de execução
             chmod +x ./gradlew
             
-            # Construir o APK diretamente
-            ./gradlew assembleRelease --info
+            # Limpar builds anteriores
+            ./gradlew clean
+            
+            # Mostra as variáveis de ambiente do Android para diagnóstico
+            echo "Variáveis de ambiente Android no momento do build:"
+            env | grep ANDROID
+            
+            # Construir o APK com informações detalhadas e stacktrace para diagnóstico
+            ./gradlew assembleRelease --info --stacktrace
             
             # Verificar se o APK foi gerado
             if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
