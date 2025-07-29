@@ -58,12 +58,16 @@ jobs:
               "expo-print": "~12.8.1",
               "expo-sharing": "~11.10.0",
               "expo-status-bar": "~1.11.1",
+              "expo-build-properties": "~0.11.1",
               "react": "18.2.0",
               "react-native": "0.73.4",
               "xlsx": "^0.18.5"
             },
             "devDependencies": {
               "@babel/core": "^7.20.0"
+            },
+            "overrides": {
+              "jimp-compact": "0.16.1"
             },
             "private": true
           }
@@ -981,10 +985,21 @@ jobs:
         run: |
           mkdir -p assets
           if [ ! -f assets/icon.png ]; then
-            echo "iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAMAAADDpiTIAAAAA1BMVEXM/wBjQ1FjAAAASElEQVR4nO3BMQEAAADCoPVPbQo/oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAICXAcTgAAG6EJuyAAAAAElFTkSuQmCC" | base64 -d > assets/icon.png
+            # Criando ícones válidos com cores sólidas simples (evita erros de CRC)
+            convert -size 1024x1024 xc:#4CAF50 assets/icon.png || {
+              # Fallback se o ImageMagick não estiver disponível
+              echo "Instalando ImageMagick..."
+              sudo apt-get update -qq && sudo apt-get install -y imagemagick
+              convert -size 1024x1024 xc:#4CAF50 assets/icon.png
+            }
+            
+            # Copiando para outros ícones necessários
             cp assets/icon.png assets/adaptive-icon.png
             cp assets/icon.png assets/splash.png
             cp assets/icon.png assets/favicon.png
+            
+            echo "✅ Ícones criados com sucesso"
+            ls -la assets/
           fi
           
       - name: 🔧 Preparar ambiente Android
@@ -1039,12 +1054,37 @@ jobs:
                 "targetSdkVersion": 34,
                 "permissions": []
               },
+              "plugins": [
+                [
+                  "expo-build-properties",
+                  {
+                    "android": {
+                      "compileSdkVersion": 34,
+                      "targetSdkVersion": 34,
+                      "buildToolsVersion": "34.0.0"
+                    }
+                  }
+                ]
+              ],
               "extra": {
                 "eas": {
                   "projectId": "84ea4587-b864-4560-a167-05855903311c"
                 }
               },
-              "owner": "pikulito"
+              "runtimeVersion": {
+                "policy": "sdkVersion"
+              },
+              "updates": {
+                "fallbackToCacheTimeout": 0,
+                "enabled": false
+              },
+              "owner": "pikulito",
+              "experiments": {
+                "tsconfigPaths": true
+              },
+              "packagerOpts": {
+                "sourceExts": ["js", "jsx", "ts", "tsx", "json"]
+              }
             }
           }
           EOF
@@ -1124,18 +1164,26 @@ jobs:
           echo "Verificando eas.json:"
           cat eas.json
           
-          # Executar o build com mais flags para torná-lo mais resiliente
+          # Exportar variáveis para evitar problemas com prebuild
           export EAS_NO_VCS=1
           export CI=1
-          echo "Usando perfil de build: ${{ github.event.inputs.profile }}"
+          export EAS_LOCAL_BUILD_SKIP_CLEANUP=1
+          export EAS_LOCAL_BUILD_ARTIFACTS_DIR=./build-output
+          export EXPO_DEBUG=1
           
-          # Construir APK usando o comando de build do EAS CLI
+          echo "Usando perfil de build: ${{ github.event.inputs.profile || 'preview' }}"
+          
+          # Construir APK usando um processo mais robusto
+          echo "Pulando o prebuild e usando abordagem direta para build..."
+          
+          # Primeiro, tentamos o build com --skip-prebuild para evitar o erro de CRC
           npx eas-cli build \
             --platform android \
             --profile=${{ github.event.inputs.profile || 'preview' }} \
             --local \
             --output=./build-output/app.apk \
-            --non-interactive
+            --non-interactive \
+            --skip-prebuild
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
