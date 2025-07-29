@@ -147,7 +147,7 @@ jobs:
         run: |
           cat > App.js << 'EOF'
           import React, { useState, useEffect } from 'react';
-          import { StyleSheet, Text, View, TouchableOpacity, FlatList, Alert, Modal, TextInput, Button, ScrollView, Image } from 'react-native';
+          import { StyleSheet, Text, View, TouchableOpacity, FlatList, Alert, Modal, TextInput, Button, ScrollView, Image, LogBox, SafeAreaView } from 'react-native';
           import * as DocumentPicker from 'expo-document-picker';
           import * as Sharing from 'expo-sharing';
           import * as Print from 'expo-print';
@@ -155,6 +155,63 @@ jobs:
           import AsyncStorage from '@react-native-async-storage/async-storage';
           import { MaterialIcons } from '@expo/vector-icons';
           import XLSX from 'xlsx';
+
+          // Desabilitar logs que possam estar causando problemas
+          LogBox.ignoreLogs(['Require cycle:', 'AsyncStorage has been extracted']);
+          
+          // Componente ErrorBoundary para capturar erros fatais
+          class ErrorBoundary extends React.Component {
+            constructor(props) {
+              super(props);
+              this.state = { hasError: false, errorInfo: null };
+            }
+            
+            static getDerivedStateFromError(error) {
+              return { hasError: true };
+            }
+            
+            componentDidCatch(error, errorInfo) {
+              console.error("Erro fatal capturado:", error);
+              this.setState({ errorInfo: errorInfo });
+              
+              // Tentar salvar o erro para diagnóstico posterior
+              try {
+                AsyncStorage.setItem('lastFatalError', JSON.stringify({
+                  message: error.message,
+                  stack: error.stack,
+                  time: new Date().toISOString()
+                }));
+              } catch (e) {
+                console.error("Não foi possível salvar o erro:", e);
+              }
+            }
+            
+            render() {
+              if (this.state.hasError) {
+                return (
+                  <SafeAreaView style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20}}>
+                    <Text style={{fontSize: 22, fontWeight: 'bold', color: 'red', marginBottom: 20}}>
+                      Algo deu errado!
+                    </Text>
+                    <Text style={{marginBottom: 20, textAlign: 'center'}}>
+                      O aplicativo encontrou um erro inesperado e precisa ser reiniciado.
+                    </Text>
+                    <Text style={{fontSize: 12, color: '#666', marginBottom: 20}}>
+                      Detalhes técnicos foram salvos para diagnóstico.
+                    </Text>
+                    <TouchableOpacity
+                      style={{backgroundColor: '#4CAF50', padding: 15, borderRadius: 5}}
+                      onPress={() => this.setState({ hasError: false })}
+                    >
+                      <Text style={{color: 'white', fontWeight: 'bold'}}>Tentar Novamente</Text>
+                    </TouchableOpacity>
+                  </SafeAreaView>
+                );
+              }
+              
+              return this.props.children;
+            }
+          }
 
           // Componente de status de sincronização
           const SyncStatus = ({ lastSync, isOnline, onSync }) => {
@@ -184,26 +241,31 @@ jobs:
             const [error, setError] = useState('');
 
             const handleLogin = () => {
-              // Usuários permitidos (em produção, seria armazenado no servidor)
-              const users = [
-                { username: 'admin', password: 'admin123', role: 'admin' },
-                { username: 'user', password: 'user123', role: 'user' }
-              ];
+              try {
+                // Usuários permitidos (em produção, seria armazenado no servidor)
+                const users = [
+                  { username: 'admin', password: 'admin123', role: 'admin' },
+                  { username: 'user', password: 'user123', role: 'user' }
+                ];
 
-              const user = users.find(
-                (u) => u.username === username && u.password === password
-              );
+                const user = users.find(
+                  (u) => u.username === username && u.password === password
+                );
 
-              if (user) {
-                onLogin(user);
-                setError('');
-              } else {
-                setError('Usuário ou senha inválidos');
+                if (user) {
+                  onLogin(user);
+                  setError('');
+                } else {
+                  setError('Usuário ou senha inválidos');
+                }
+              } catch (error) {
+                console.error("Erro no login:", error);
+                setError('Erro ao processar login. Tente novamente.');
               }
             };
 
             return (
-              <View style={styles.loginContainer}>
+              <SafeAreaView style={styles.loginContainer}>
                 <View style={styles.logoContainer}>
                   <MaterialIcons name="nature" size={80} color="#4CAF50" />
                   <Text style={styles.logoText}>Corte de Matos</Text>
@@ -228,9 +290,1001 @@ jobs:
                     <Text style={styles.loginButtonText}>Entrar</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+                <Text style={{position: 'absolute', bottom: 20, color: '#999', fontSize: 12}}>
+                  Versão 1.1.0 - {new Date().getFullYear()}
+                </Text>
+              </SafeAreaView>
             );
           };
+
+          // Wrapper do aplicativo com ErrorBoundary
+          const AppWithErrorBoundary = () => {
+            return (
+              <ErrorBoundary>
+                <MainApp />
+              </ErrorBoundary>
+            );
+          };
+
+          // Aplicativo principal
+          const MainApp = () => {
+            const [vaos, setVaos] = useState([]);
+            const [modalVisible, setModalVisible] = useState(false);
+            const [selectedVao, setSelectedVao] = useState(null);
+            const [user, setUser] = useState(null);
+            const [isOnline, setIsOnline] = useState(false);
+            const [lastSync, setLastSync] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [hasInitError, setHasInitError] = useState(false);
+
+            // Inicialização controlada para evitar erros
+            useEffect(() => {
+              console.log("Iniciando o aplicativo...");
+              
+              const init = async () => {
+                try {
+                  setIsLoading(true);
+                  
+                  // Carregar configuração de usuário
+                  await loadUser();
+                  
+                  // Carregar dados de vãos
+                  await loadVaos();
+                  
+                  // Simular status online
+                  setIsOnline(Math.random() > 0.3);
+                  
+                  // Carregar última sincronização
+                  const lastSyncData = await AsyncStorage.getItem('lastSync');
+                  if (lastSyncData) {
+                    setLastSync(lastSyncData);
+                  }
+                  
+                  console.log("Inicialização concluída com sucesso.");
+                } catch (error) {
+                  console.error("Erro durante a inicialização:", error);
+                  setHasInitError(true);
+                  
+                  // Apresentar alerta amigável sobre o erro
+                  Alert.alert(
+                    "Problema na inicialização", 
+                    "Ocorreu um erro ao iniciar o aplicativo. Alguns recursos podem não funcionar corretamente.",
+                    [{ text: "OK" }]
+                  );
+                } finally {
+                  setIsLoading(false);
+                }
+              };
+              
+              init();
+              
+              // Configurar verificação periódica de status online
+              const interval = setInterval(() => {
+                setIsOnline(Math.random() > 0.3);
+              }, 10000);
+              
+              return () => clearInterval(interval);
+            }, []);
+
+            // Função para carregar usuário
+            const loadUser = async () => {
+              try {
+                const savedUser = await AsyncStorage.getItem('user');
+                if (savedUser) {
+                  setUser(JSON.parse(savedUser));
+                }
+              } catch (error) {
+                console.error('Erro ao carregar usuário:', error);
+                throw error; // Propagar o erro para ser tratado na inicialização
+              }
+            };
+
+            // Função para carregar os vãos
+            const loadVaos = async () => {
+              try {
+                const savedVaos = await AsyncStorage.getItem('vaos');
+                if (savedVaos) {
+                  setVaos(JSON.parse(savedVaos));
+                }
+              } catch (error) {
+                console.error('Erro ao carregar vaos:', error);
+                throw error; // Propagar o erro para ser tratado na inicialização
+              }
+            };
+
+            // Salva vaos no armazenamento local
+            useEffect(() => {
+              const saveVaos = async () => {
+                try {
+                  if (vaos.length > 0) {
+                    await AsyncStorage.setItem('vaos', JSON.stringify(vaos));
+                  }
+                } catch (error) {
+                  console.error('Erro ao salvar vaos:', error);
+                  Alert.alert(
+                    "Erro ao salvar dados",
+                    "Não foi possível salvar as alterações. Verifique o espaço disponível no dispositivo.",
+                    [{ text: "OK" }]
+                  );
+                }
+              };
+
+              saveVaos();
+            }, [vaos]);
+
+            const handleLogin = async (loggedUser) => {
+              try {
+                setUser(loggedUser);
+                await AsyncStorage.setItem('user', JSON.stringify(loggedUser));
+                console.log("Usuário logado com sucesso:", loggedUser.username);
+              } catch (error) {
+                console.error('Erro ao salvar usuário:', error);
+                Alert.alert(
+                  "Erro no login",
+                  "Usuário autenticado, mas não foi possível salvar os dados de sessão.",
+                  [{ text: "OK" }]
+                );
+              }
+            };
+
+            const handleLogout = async () => {
+              try {
+                setUser(null);
+                await AsyncStorage.removeItem('user');
+                console.log("Logout realizado com sucesso");
+              } catch (error) {
+                console.error('Erro ao remover usuário:', error);
+                Alert.alert(
+                  "Erro no logout",
+                  "Não foi possível finalizar a sessão corretamente.",
+                  [{ text: "OK" }]
+                );
+              }
+            };
+
+            const handleSync = () => {
+              try {
+                if (!isOnline) {
+                  Alert.alert("Erro", "Você está offline. Não é possível sincronizar.");
+                  return;
+                }
+                
+                // Simulação de sincronização
+                Alert.alert(
+                  "Sincronização",
+                  "Sincronizando dados com o servidor...",
+                  [{ text: "OK" }]
+                );
+                
+                const now = new Date().toLocaleString();
+                setLastSync(now);
+                
+                // Salvar data de sincronização
+                AsyncStorage.setItem('lastSync', now);
+                console.log("Sincronização simulada em:", now);
+              } catch (error) {
+                console.error('Erro durante sincronização:', error);
+                Alert.alert(
+                  "Erro na sincronização",
+                  "Não foi possível completar a sincronização.",
+                  [{ text: "OK" }]
+                );
+              }
+            };
+
+            const pickExcel = async () => {
+              try {
+                console.log("Iniciando seleção de arquivo Excel...");
+                const result = await DocumentPicker.getDocumentAsync({
+                  type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+
+                if (result.canceled) {
+                  console.log("Seleção de arquivo cancelada pelo usuário");
+                  return;
+                }
+
+                console.log("Arquivo selecionado:", result.assets[0].name);
+                const { uri } = result.assets[0];
+                const response = await fetch(uri);
+                const blob = await response.blob();
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                  try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    if (!workbook || !workbook.SheetNames || workbook.SheetNames.length === 0) {
+                      throw new Error("Arquivo Excel inválido ou vazio");
+                    }
+                    
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (!jsonData || jsonData.length === 0) {
+                      Alert.alert("Aviso", "A planilha não contém dados ou está em formato inválido.");
+                      return;
+                    }
+
+                    // Transformando os dados do Excel com validação
+                    const newVaos = jsonData.map((item, index) => {
+                      // Verificar campos obrigatórios
+                      const descricao = item.Descricao || 'Sem descrição';
+                      const localizacao = item.Localizacao || 'Sem localização';
+                      const area = parseFloat(item.Area) || 0;
+                      
+                      // Validar e formatar a data
+                      let dataNecessidade = new Date().toISOString().split('T')[0];
+                      if (item.DataNecessidade) {
+                        // Tentar reconhecer formatos comuns de data
+                        const dateAttempt = new Date(item.DataNecessidade);
+                        if (!isNaN(dateAttempt.getTime())) {
+                          dataNecessidade = dateAttempt.toISOString().split('T')[0];
+                        }
+                      }
+                      
+                      return {
+                        id: Date.now() + index,
+                        descricao,
+                        localizacao, 
+                        area,
+                        dataNecessidade,
+                        status: 'pendente',
+                        dataInicio: null,
+                        dataConclusao: null,
+                      };
+                    });
+
+                    console.log(`Processados ${newVaos.length} vãos da planilha`);
+                    setVaos([...vaos, ...newVaos]);
+                    Alert.alert('Sucesso', `${newVaos.length} vãos importados com sucesso!`);
+                  } catch (error) {
+                    console.error('Erro ao processar planilha:', error);
+                    Alert.alert(
+                      'Erro',
+                      'Não foi possível processar o arquivo Excel. Verifique se o formato está correto.'
+                    );
+                  }
+                };
+
+                reader.onerror = (error) => {
+                  console.error('Erro na leitura do arquivo:', error);
+                  Alert.alert('Erro', 'Falha ao ler o arquivo. Tente novamente.');
+                };
+
+                reader.readAsArrayBuffer(blob);
+              } catch (error) {
+                console.error('Erro ao importar Excel:', error);
+                Alert.alert('Erro', 'Não foi possível ler o arquivo Excel. Verifique as permissões do aplicativo.');
+              }
+            };
+
+            const openVaoDetails = (vao) => {
+              setSelectedVao(vao);
+              setModalVisible(true);
+            };
+
+            const updateVaoStatus = (id, newStatus) => {
+              try {
+                const updatedVaos = vaos.map((vao) => {
+                  if (vao.id === id) {
+                    if (newStatus === 'iniciado' && vao.status === 'pendente') {
+                      return { ...vao, status: newStatus, dataInicio: new Date().toISOString().split('T')[0] };
+                    } else if (newStatus === 'concluido' && (vao.status === 'pendente' || vao.status === 'iniciado')) {
+                      return { 
+                        ...vao, 
+                        status: newStatus, 
+                        dataInicio: vao.dataInicio || new Date().toISOString().split('T')[0],
+                        dataConclusao: new Date().toISOString().split('T')[0] 
+                      };
+                    }
+                  }
+                  return vao;
+                });
+
+                setVaos(updatedVaos);
+                setModalVisible(false);
+              } catch (error) {
+                console.error('Erro ao atualizar status:', error);
+                Alert.alert('Erro', 'Não foi possível atualizar o status do vão.');
+              }
+            };
+
+            const getStatusColor = (status) => {
+              switch (status) {
+                case 'pendente':
+                  return '#9E9E9E';
+                case 'iniciado':
+                  return '#FFC107';
+                case 'concluido':
+                  return '#4CAF50';
+                default:
+                  return '#9E9E9E';
+              }
+            };
+
+            const getStatusText = (status) => {
+              switch (status) {
+                case 'pendente':
+                  return 'Pendente';
+                case 'iniciado':
+                  return 'Iniciado';
+                case 'concluido':
+                  return 'Concluído';
+                default:
+                  return 'Desconhecido';
+              }
+            };
+
+            const isUrgent = (dataNecessidade) => {
+              try {
+                const today = new Date();
+                const necessidade = new Date(dataNecessidade);
+                const diffTime = necessidade - today;
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                return diffDays <= 7 && diffDays > 0;
+              } catch (error) {
+                console.error('Erro ao verificar urgência:', error);
+                return false;
+              }
+            };
+
+            const isLate = (dataNecessidade) => {
+              try {
+                const today = new Date();
+                const necessidade = new Date(dataNecessidade);
+                return necessidade < today;
+              } catch (error) {
+                console.error('Erro ao verificar atraso:', error);
+                return false;
+              }
+            };
+
+            const generateReport = async () => {
+              try {
+                console.log("Gerando relatório...");
+                const pendentes = vaos.filter(vao => vao.status === 'pendente').length;
+                const iniciados = vaos.filter(vao => vao.status === 'iniciado').length;
+                const concluidos = vaos.filter(vao => vao.status === 'concluido').length;
+                const total = vaos.length;
+                
+                const percentConcluido = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+                
+                let vaosList = '';
+                vaos.forEach(vao => {
+                  vaosList += `
+                    <tr>
+                      <td>${vao.descricao}</td>
+                      <td>${vao.localizacao}</td>
+                      <td>${vao.area}</td>
+                      <td>${vao.dataNecessidade}</td>
+                      <td style="color: ${getStatusColor(vao.status)}">${getStatusText(vao.status)}</td>
+                    </tr>
+                  `;
+                });
+
+                const html = `
+                  <html>
+                    <head>
+                      <meta charset="UTF-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                      <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #4CAF50; text-align: center; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .summary { margin: 20px 0; padding: 15px; background-color: #f5f5f5; border-radius: 5px; }
+                        .progress-container { height: 20px; background-color: #e0e0e0; border-radius: 10px; margin: 15px 0; }
+                        .progress-bar { height: 100%; width: ${percentConcluido}%; background-color: #4CAF50; border-radius: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #4CAF50; color: white; }
+                        tr:nth-child(even) { background-color: #f2f2f2; }
+                        .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="header">
+                        <h1>Relatório de Corte de Matos</h1>
+                        <p>Data de geração: ${new Date().toLocaleDateString()}</p>
+                      </div>
+                      
+                      <div class="summary">
+                        <h2>Resumo</h2>
+                        <p>Total de vãos: ${total}</p>
+                        <p>Pendentes: ${pendentes}</p>
+                        <p>Iniciados: ${iniciados}</p>
+                        <p>Concluídos: ${concluidos}</p>
+                        
+                        <h3>Progresso: ${percentConcluido}%</h3>
+                        <div class="progress-container">
+                          <div class="progress-bar"></div>
+                        </div>
+                      </div>
+                      
+                      <h2>Detalhes dos Vãos</h2>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Descrição</th>
+                            <th>Localização</th>
+                            <th>Área</th>
+                            <th>Data Necessidade</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${vaosList}
+                        </tbody>
+                      </table>
+                      
+                      <div class="footer">
+                        <p>Aplicativo de Controle de Corte de Matos - v1.1.0</p>
+                      </div>
+                    </body>
+                  </html>
+                `;
+
+                console.log("Criando PDF com Expo Print...");
+                const { uri } = await Print.printToFileAsync({ html });
+                
+                console.log("PDF gerado em:", uri);
+                
+                if (await Sharing.isAvailableAsync()) {
+                  console.log("Compartilhando PDF...");
+                  await Sharing.shareAsync(uri);
+                } else {
+                  Alert.alert(
+                    'Erro',
+                    'Compartilhamento não está disponível neste dispositivo'
+                  );
+                }
+              } catch (error) {
+                console.error('Erro ao gerar relatório:', error);
+                Alert.alert('Erro', 'Não foi possível gerar o relatório. Tente novamente.');
+              }
+            };
+
+            // Tela de loading
+            if (isLoading) {
+              return (
+                <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5'}}>
+                  <MaterialIcons name="nature" size={100} color="#4CAF50" />
+                  <Text style={{fontSize: 22, fontWeight: 'bold', color: '#4CAF50', marginTop: 20}}>
+                    Corte de Matos
+                  </Text>
+                  <Text style={{marginTop: 20, color: '#666'}}>
+                    Carregando aplicativo...
+                  </Text>
+                </View>
+              );
+            }
+
+            // Tela de erro de inicialização
+            if (hasInitError) {
+              return (
+                <View style={{flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#f5f5f5'}}>
+                  <MaterialIcons name="error-outline" size={80} color="#d32f2f" />
+                  <Text style={{fontSize: 22, fontWeight: 'bold', color: '#d32f2f', marginTop: 20, marginBottom: 10}}>
+                    Erro de Inicialização
+                  </Text>
+                  <Text style={{textAlign: 'center', marginBottom: 20}}>
+                    Não foi possível iniciar o aplicativo corretamente. 
+                    Isso pode ser causado por dados corrompidos ou falta de permissões.
+                  </Text>
+                  <TouchableOpacity
+                    style={{backgroundColor: '#4CAF50', padding: 15, borderRadius: 5, marginTop: 10}}
+                    onPress={async () => {
+                      try {
+                        await AsyncStorage.clear();
+                        Alert.alert(
+                          "Dados Resetados", 
+                          "Os dados do aplicativo foram resetados. Reinicie o aplicativo.",
+                          [{ text: "OK" }]
+                        );
+                      } catch (error) {
+                        console.error("Erro ao limpar dados:", error);
+                        Alert.alert("Erro", "Não foi possível limpar os dados. Tente reinstalar o aplicativo.");
+                      }
+                    }}
+                  >
+                    <Text style={{color: 'white', fontWeight: 'bold'}}>Resetar Dados</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            // Tela de login
+            if (!user) {
+              return <LoginScreen onLogin={handleLogin} />;
+            }
+
+            // Tela principal do app
+            return (
+              <SafeAreaView style={styles.container}>
+                <View style={styles.header}>
+                  <Text style={styles.title}>Corte de Matos</Text>
+                  <View style={styles.userInfo}>
+                    <Text style={styles.userText}>
+                      {user.username} ({user.role === 'admin' ? 'Admin' : 'Usuário'})
+                    </Text>
+                    <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                      <MaterialIcons name="exit-to-app" size={24} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <SyncStatus 
+                  isOnline={isOnline} 
+                  lastSync={lastSync} 
+                  onSync={handleSync} 
+                />
+
+                <View style={styles.actions}>
+                  {user.role === 'admin' && (
+                    <TouchableOpacity style={styles.button} onPress={pickExcel}>
+                      <MaterialIcons name="file-upload" size={24} color="white" />
+                      <Text style={styles.buttonText}>Importar Excel</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  <TouchableOpacity style={styles.button} onPress={generateReport}>
+                    <MaterialIcons name="description" size={24} color="white" />
+                    <Text style={styles.buttonText}>Gerar Relatório</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.sectionTitle}>Lista de Vãos ({vaos.length})</Text>
+                
+                {vaos.length > 0 ? (
+                  <FlatList
+                    data={vaos}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[
+                          styles.vaoItem,
+                          { borderLeftColor: getStatusColor(item.status) }
+                        ]}
+                        onPress={() => openVaoDetails(item)}
+                      >
+                        <View style={styles.vaoHeader}>
+                          <Text style={styles.vaoTitle}>{item.descricao}</Text>
+                          <View style={styles.vaoStatusContainer}>
+                            {isUrgent(item.dataNecessidade) && !isLate(item.dataNecessidade) && (
+                              <Text style={styles.urgentIcon}>🕐</Text>
+                            )}
+                            {isLate(item.dataNecessidade) && item.status !== 'concluido' && (
+                              <Text style={styles.lateIcon}>⚠️</Text>
+                            )}
+                            <View 
+                              style={[
+                                styles.vaoStatusBadge, 
+                                { backgroundColor: getStatusColor(item.status) }
+                              ]}
+                            >
+                              <Text style={styles.vaoStatusText}>{getStatusText(item.status)}</Text>
+                            </View>
+                          </View>
+                        </View>
+                        
+                        <Text style={styles.vaoLocation}>{item.localizacao}</Text>
+                        <Text style={styles.vaoArea}>Área: {item.area}m²</Text>
+                        <Text style={[
+                          styles.vaoDate,
+                          isLate(item.dataNecessidade) && item.status !== 'concluido' ? styles.lateDate : null,
+                          isUrgent(item.dataNecessidade) && !isLate(item.dataNecessidade) ? styles.urgentDate : null
+                        ]}>
+                          Data necessidade: {item.dataNecessidade}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="nature" size={80} color="#e0e0e0" />
+                    <Text style={styles.emptyText}>Nenhum vão cadastrado</Text>
+                    {user.role === 'admin' ? (
+                      <Text style={styles.emptySubText}>Importe um arquivo Excel para começar</Text>
+                    ) : (
+                      <Text style={styles.emptySubText}>Aguarde o administrador importar os dados</Text>
+                    )}
+                  </View>
+                )}
+
+                <Modal
+                  animationType="slide"
+                  transparent={true}
+                  visible={modalVisible}
+                  onRequestClose={() => setModalVisible(false)}
+                >
+                  <View style={styles.modalContainer}>
+                    <View style={styles.modalContent}>
+                      {selectedVao && (
+                        <>
+                          <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>{selectedVao.descricao}</Text>
+                            <TouchableOpacity 
+                              style={styles.closeButton} 
+                              onPress={() => setModalVisible(false)}
+                            >
+                              <MaterialIcons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                          </View>
+                          
+                          <ScrollView style={styles.modalBody}>
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Localização:</Text>
+                              <Text style={styles.modalValue}>{selectedVao.localizacao}</Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Área:</Text>
+                              <Text style={styles.modalValue}>{selectedVao.area}m²</Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Data de necessidade:</Text>
+                              <Text style={[
+                                styles.modalValue,
+                                isLate(selectedVao.dataNecessidade) && selectedVao.status !== 'concluido' ? styles.lateDate : null
+                              ]}>
+                                {selectedVao.dataNecessidade}
+                                {isLate(selectedVao.dataNecessidade) && selectedVao.status !== 'concluido' && ' ⚠️ ATRASADO'}
+                              </Text>
+                            </View>
+                            
+                            <View style={styles.modalSection}>
+                              <Text style={styles.modalLabel}>Status atual:</Text>
+                              <View style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(selectedVao.status) }
+                              ]}>
+                                <Text style={styles.statusBadgeText}>{getStatusText(selectedVao.status)}</Text>
+                              </View>
+                            </View>
+                            
+                            {selectedVao.dataInicio && (
+                              <View style={styles.modalSection}>
+                                <Text style={styles.modalLabel}>Data de início:</Text>
+                                <Text style={styles.modalValue}>{selectedVao.dataInicio}</Text>
+                              </View>
+                            )}
+                            
+                            {selectedVao.dataConclusao && (
+                              <View style={styles.modalSection}>
+                                <Text style={styles.modalLabel}>Data de conclusão:</Text>
+                                <Text style={styles.modalValue}>{selectedVao.dataConclusao}</Text>
+                              </View>
+                            )}
+                          </ScrollView>
+                          
+                          <View style={styles.modalActions}>
+                            {selectedVao.status === 'pendente' && (
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.startButton]}
+                                onPress={() => updateVaoStatus(selectedVao.id, 'iniciado')}
+                              >
+                                <MaterialIcons name="play-arrow" size={16} color="white" />
+                                <Text style={styles.actionButtonText}>Iniciar</Text>
+                              </TouchableOpacity>
+                            )}
+                            
+                            {(selectedVao.status === 'pendente' || selectedVao.status === 'iniciado') && (
+                              <TouchableOpacity
+                                style={[styles.actionButton, styles.completeButton]}
+                                onPress={() => updateVaoStatus(selectedVao.id, 'concluido')}
+                              >
+                                <MaterialIcons name="check" size={16} color="white" />
+                                <Text style={styles.actionButtonText}>Concluir</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </Modal>
+
+                <StatusBar style="auto" />
+              </SafeAreaView>
+            );
+          };
+
+          export default function App() {
+            return <AppWithErrorBoundary />;
+          }
+
+          const styles = StyleSheet.create({
+            container: {
+              flex: 1,
+              backgroundColor: '#f5f5f5',
+            },
+            header: {
+              backgroundColor: '#4CAF50',
+              padding: 16,
+              paddingTop: 50,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            },
+            title: {
+              color: 'white',
+              fontSize: 20,
+              fontWeight: 'bold',
+            },
+            userInfo: {
+              flexDirection: 'row',
+              alignItems: 'center',
+            },
+            userText: {
+              color: 'white',
+              marginRight: 8,
+            },
+            logoutButton: {
+              padding: 5,
+            },
+            actions: {
+              flexDirection: 'row',
+              padding: 16,
+              justifyContent: 'space-around',
+            },
+            button: {
+              backgroundColor: '#4CAF50',
+              flexDirection: 'row',
+              alignItems: 'center',
+              padding: 10,
+              borderRadius: 5,
+              minWidth: 150,
+              justifyContent: 'center',
+            },
+            buttonText: {
+              color: 'white',
+              marginLeft: 8,
+            },
+            sectionTitle: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              margin: 16,
+              marginBottom: 8,
+            },
+            vaoItem: {
+              backgroundColor: 'white',
+              padding: 16,
+              marginHorizontal: 16,
+              marginBottom: 8,
+              borderRadius: 5,
+              borderLeftWidth: 5,
+              elevation: 2,
+            },
+            vaoHeader: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 5,
+            },
+            vaoTitle: {
+              fontSize: 16,
+              fontWeight: 'bold',
+              flex: 1,
+            },
+            vaoStatusContainer: {
+              flexDirection: 'row',
+              alignItems: 'center',
+            },
+            vaoStatusBadge: {
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 10,
+            },
+            vaoStatusText: {
+              color: 'white',
+              fontSize: 12,
+            },
+            vaoLocation: {
+              color: '#555',
+              marginBottom: 5,
+            },
+            vaoArea: {
+              color: '#555',
+              marginBottom: 5,
+            },
+            vaoDate: {
+              color: '#555',
+            },
+            lateDate: {
+              color: '#d32f2f',
+              fontWeight: 'bold',
+            },
+            urgentDate: {
+              color: '#ff9800',
+              fontWeight: 'bold',
+            },
+            urgentIcon: {
+              marginRight: 5,
+              fontSize: 16,
+            },
+            lateIcon: {
+              marginRight: 5,
+              fontSize: 16,
+            },
+            emptyContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            },
+            emptyText: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              color: '#9e9e9e',
+              marginTop: 10,
+            },
+            emptySubText: {
+              color: '#9e9e9e',
+              textAlign: 'center',
+              marginTop: 5,
+            },
+            modalContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            },
+            modalContent: {
+              backgroundColor: 'white',
+              width: '90%',
+              borderRadius: 10,
+              overflow: 'hidden',
+              maxHeight: '80%',
+            },
+            modalHeader: {
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 16,
+              backgroundColor: '#f5f5f5',
+              borderBottomWidth: 1,
+              borderBottomColor: '#e0e0e0',
+            },
+            modalTitle: {
+              fontSize: 18,
+              fontWeight: 'bold',
+              flex: 1,
+            },
+            closeButton: {
+              padding: 5,
+            },
+            modalBody: {
+              padding: 16,
+              maxHeight: 300,
+            },
+            modalSection: {
+              marginBottom: 12,
+            },
+            modalLabel: {
+              color: '#666',
+              fontSize: 14,
+              marginBottom: 2,
+            },
+            modalValue: {
+              fontSize: 16,
+            },
+            statusBadge: {
+              alignSelf: 'flex-start',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 15,
+              marginTop: 2,
+            },
+            statusBadgeText: {
+              color: 'white',
+              fontWeight: 'bold',
+            },
+            modalActions: {
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              padding: 16,
+              borderTopWidth: 1,
+              borderTopColor: '#e0e0e0',
+            },
+            actionButton: {
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 5,
+              marginLeft: 8,
+            },
+            actionButtonText: {
+              color: 'white',
+              marginLeft: 5,
+              fontWeight: 'bold',
+            },
+            startButton: {
+              backgroundColor: '#FFC107',
+            },
+            completeButton: {
+              backgroundColor: '#4CAF50',
+            },
+            // Login styles
+            loginContainer: {
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: '#f5f5f5',
+              padding: 20,
+            },
+            logoContainer: {
+              alignItems: 'center',
+              marginBottom: 40,
+            },
+            logoText: {
+              fontSize: 28,
+              fontWeight: 'bold',
+              color: '#4CAF50',
+              marginTop: 10,
+            },
+            formContainer: {
+              width: '100%',
+              maxWidth: 300,
+            },
+            input: {
+              backgroundColor: 'white',
+              padding: 15,
+              borderRadius: 5,
+              marginBottom: 15,
+              borderWidth: 1,
+              borderColor: '#ddd',
+            },
+            errorText: {
+              color: 'red',
+              marginBottom: 15,
+              textAlign: 'center',
+            },
+            loginButton: {
+              backgroundColor: '#4CAF50',
+              padding: 15,
+              borderRadius: 5,
+              alignItems: 'center',
+            },
+            loginButtonText: {
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: 16,
+            },
+            // Sync styles
+            syncContainer: {
+              backgroundColor: '#e8f5e9',
+              padding: 10,
+              margin: 16,
+              borderRadius: 5,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            },
+            syncText: {
+              fontSize: 12,
+              color: '#2e7d32',
+              marginRight: 5,
+            },
+            syncButton: {
+              backgroundColor: '#4CAF50',
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 15,
+            },
+            syncButtonDisabled: {
+              backgroundColor: '#9E9E9E',
+            },
+            syncButtonText: {
+              color: 'white',
+              fontSize: 12,
+            },
+          });
+          EOF
 
           export default function App() {
             const [vaos, setVaos] = useState([]);
@@ -1075,6 +2129,18 @@ jobs:
           echo "SDK Path configurado: $ANDROID_HOME"
           ls -la $ANDROID_HOME || echo "Diretório SDK não encontrado"
           
+          # Instalar ou atualizar SDK para versão 29
+          echo "Verificando e instalando SDK 29 se necessário..."
+          mkdir -p $ANDROID_HOME/licenses/
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > $ANDROID_HOME/licenses/android-sdk-license
+          echo "d56f5187479451eabf01fb78af6dfcb131a6481e" > $ANDROID_HOME/licenses/android-sdk-license
+          
+          # Instalar componentes específicos do SDK 29
+          echo y | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-29" "build-tools;29.0.2"
+          
+          # Confirmar instalação
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep "29"
+          
           # Instalar Android build tools necessários
           sudo npm install -g turtle-cli --unsafe-perm
 
@@ -1104,8 +2170,8 @@ jobs:
                 },
                 "package": "com.managematos.cortepoda",
                 "versionCode": 6,
-                "compileSdkVersion": 33,
-                "targetSdkVersion": 33,
+                "compileSdkVersion": 29,
+                "targetSdkVersion": 29,
                 "permissions": []
               },
               "plugins": [
@@ -1113,9 +2179,9 @@ jobs:
                   "expo-build-properties",
                   {
                     "android": {
-                      "compileSdkVersion": 33,
-                      "targetSdkVersion": 33,
-                      "buildToolsVersion": "33.0.0"
+                      "compileSdkVersion": 29,
+                      "targetSdkVersion": 29,
+                      "buildToolsVersion": "29.0.3"
                     }
                   }
                 ]
@@ -1210,19 +2276,19 @@ jobs:
 
           android {
             namespace "com.managematos.cortepoda"
-            compileSdkVersion 33
-            buildToolsVersion "33.0.0"
-            ndkVersion "25.2.9519653"
+            compileSdkVersion 29
+            buildToolsVersion "29.0.3"
+            ndkVersion "21.4.7075529"
 
             compileOptions {
-              sourceCompatibility JavaVersion.VERSION_11
-              targetCompatibility JavaVersion.VERSION_11
+              sourceCompatibility JavaVersion.VERSION_1_8
+              targetCompatibility JavaVersion.VERSION_1_8
             }
 
             defaultConfig {
               applicationId "com.managematos.cortepoda"
               minSdkVersion 21
-              targetSdkVersion 33
+              targetSdkVersion 29
               versionCode 1
               versionName "1.0.0"
             }
@@ -1290,6 +2356,42 @@ jobs:
           echo "Verificando arquivos de configuração:"
           ls -la *.json
           
+          # Garantir que não estamos usando versões incompatíveis
+          echo "Adicionando override para evitar problemas de incompatibilidade..."
+          npm install --save @babel/runtime@latest
+          
+          # Exportar variáveis para evitar problemas com prebuild
+          export EAS_NO_VCS=1
+          export CI=1
+          export EAS_LOCAL_BUILD_SKIP_CLEANUP=1
+          export EAS_LOCAL_BUILD_ARTIFACTS_DIR=./build-output
+          
+          echo "Usando profile de build: ${{ github.event.inputs.profile || 'preview' }}"
+          
+          # Configuração adicional para depuração
+          echo "Habilitando logs detalhados para depuração de problemas de inicialização"
+          cat > metro.config.js << 'EOF'
+          const { getDefaultConfig } = require('@expo/metro-config');
+          const defaultConfig = getDefaultConfig(__dirname);
+          
+          defaultConfig.resolver.assetExts.push('bin');
+          defaultConfig.resolver.sourceExts = ['jsx', 'js', 'ts', 'tsx', 'json'];
+          
+          // Aumentar tempo limite para evitar problemas de timeout
+          defaultConfig.server.timeoutForBundling = 60000;
+          
+          module.exports = defaultConfig;
+          EOF
+          
+          # Gerar o projeto nativo manualmente
+          echo "Executando prebuild manual com expo..."
+          npx expo prebuild --platform android --clean --no-install
+          
+          # Verificar arquivos críticos
+          ls -la
+          echo "Verificando arquivos de configuração:"
+          ls -la *.json
+          
           # Exportar variáveis para evitar problemas com prebuild
           export EAS_NO_VCS=1
           export CI=1
@@ -1314,12 +2416,156 @@ jobs:
                 echo "Adicionando android.disableAutomaticComponentCreation=true ao gradle.properties"
                 echo "android.disableAutomaticComponentCreation=true" >> android/gradle.properties
               fi
+              
+              # Adicionar configurações para evitar problemas de memória
+              echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
+              echo "org.gradle.daemon=true" >> android/gradle.properties
+              echo "org.gradle.parallel=true" >> android/gradle.properties
+              echo "org.gradle.configureondemand=true" >> android/gradle.properties
             fi
             
             # Aplicar template de build.gradle personalizado se existir
             if [ -f "android/app/build.gradle.template" ] && [ -f "android/app/build.gradle" ]; then
               echo "Aplicando template de build.gradle personalizado..."
               cp android/app/build.gradle.template android/app/build.gradle
+            fi
+            
+            # Verificar build.gradle e adicionar configurações necessárias
+            if [ -f "android/app/build.gradle" ]; then
+              echo "Verificando e corrigindo build.gradle..."
+              
+              # Adicionar configuração para multidex se necessário
+              if ! grep -q "multiDexEnabled" android/app/build.gradle; then
+                sed -i '/defaultConfig {/a\\        multiDexEnabled true' android/app/build.gradle
+              fi
+              
+              # Adicionar dependência multidex
+              if ! grep -q "androidx.multidex:multidex" android/app/build.gradle; then
+                sed -i '/dependencies {/a\\    implementation "androidx.multidex:multidex:2.0.1"' android/app/build.gradle
+              fi
+            fi
+            
+            # Criar arquivo de configuração MainApplication para capturar erros
+            mkdir -p android/app/src/main/java/com/managematos/cortepoda
+            cat > android/app/src/main/java/com/managematos/cortepoda/MainApplication.java.new << 'EOF'
+            package com.managematos.cortepoda;
+
+            import android.app.Application;
+            import android.content.Context;
+            import android.util.Log;
+            import androidx.multidex.MultiDex;
+
+            import com.facebook.react.PackageList;
+            import com.facebook.react.ReactApplication;
+            import com.facebook.react.ReactInstanceManager;
+            import com.facebook.react.ReactNativeHost;
+            import com.facebook.react.ReactPackage;
+            import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint;
+            import com.facebook.react.defaults.DefaultReactNativeHost;
+            import com.facebook.soloader.SoLoader;
+
+            import expo.modules.ApplicationLifecycleDispatcher;
+            import expo.modules.ReactNativeHostWrapper;
+
+            import java.lang.reflect.InvocationTargetException;
+            import java.util.List;
+
+            public class MainApplication extends Application implements ReactApplication {
+              private static final String TAG = "MainApplication";
+              
+              private final ReactNativeHost mReactNativeHost = new ReactNativeHostWrapper(
+                this,
+                new DefaultReactNativeHost(this) {
+                  @Override
+                  public boolean getUseDeveloperSupport() {
+                    return false;
+                  }
+
+                  @Override
+                  protected List<ReactPackage> getPackages() {
+                    @SuppressWarnings("UnnecessaryLocalVariable")
+                    List<ReactPackage> packages = new PackageList(this).getPackages();
+                    // Packages that cannot be autolinked yet can be added manually here
+                    return packages;
+                  }
+
+                  @Override
+                  protected String getJSMainModuleName() {
+                    return "index";
+                  }
+
+                  @Override
+                  protected boolean isNewArchEnabled() {
+                    return false;
+                  }
+
+                  @Override
+                  protected Boolean isHermesEnabled() {
+                    return false;
+                  }
+                }
+              );
+
+              @Override
+              public ReactNativeHost getReactNativeHost() {
+                return mReactNativeHost;
+              }
+
+              @Override
+              public void onCreate() {
+                super.onCreate();
+                
+                try {
+                  // Inicialização para capturar erros
+                  Thread.setDefaultUncaughtExceptionHandler(
+                    (thread, throwable) -> {
+                      Log.e(TAG, "ERRO FATAL: " + throwable.getMessage(), throwable);
+                    }
+                  );
+                  
+                  SoLoader.init(this, /* native exopackage */ false);
+                  
+                  // Iniciar React Native
+                  initializeFlipper(this, getReactNativeHost().getReactInstanceManager());
+                  ApplicationLifecycleDispatcher.onApplicationCreate(this);
+                } catch (Exception e) {
+                  Log.e(TAG, "Erro na inicialização do app: " + e.getMessage(), e);
+                }
+              }
+
+              @Override
+              protected void attachBaseContext(Context base) {
+                super.attachBaseContext(base);
+                // Suporte para multidex
+                MultiDex.install(this);
+              }
+
+              @Override
+              public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+                super.onConfigurationChanged(newConfig);
+                ApplicationLifecycleDispatcher.onConfigurationChanged(this, newConfig);
+              }
+
+            // Método para inicializar Flipper
+              private static void initializeFlipper(Context context, ReactInstanceManager reactInstanceManager) {
+                // No SDK 29, algumas classes do Flipper podem causar problemas
+                // Vamos usar try-catch para evitar erros de inicialização
+                try {
+                  Class<?> aClass = Class.forName("com.managematos.cortepoda.ReactNativeFlipper");
+                  aClass
+                      .getMethod("initializeFlipper", Context.class, ReactInstanceManager.class)
+                      .invoke(null, context, reactInstanceManager);
+                } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+                  Log.e(TAG, "Erro ao inicializar Flipper", e);
+                }
+              }
+            }
+            EOF
+            
+            # Tentar substituir o MainApplication.java
+            if [ -f android/app/src/main/java/com/managematos/cortepoda/MainApplication.java ]; then
+              echo "Substituindo MainApplication.java com versão melhorada..."
+              cp android/app/src/main/java/com/managematos/cortepoda/MainApplication.java.new android/app/src/main/java/com/managematos/cortepoda/MainApplication.java
             fi
             
             # Verificar se precisamos ajustar o gradlew
