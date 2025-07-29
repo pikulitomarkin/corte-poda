@@ -2330,6 +2330,15 @@ jobs:
           echo "Verificando configuração do ambiente Android:"
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          echo "PATH=$PATH"
+          
+          # Verificar componentes do SDK instalados
+          echo "Componentes do SDK instalados:"
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list | grep -E "installed|Installed" | head -20
+          
+          # Verificar diretório do projeto
+          echo "Estrutura do diretório do projeto:"
+          ls -la
           
           # Garantir que ambas as variáveis apontem para o mesmo local
           if [ "$ANDROID_HOME" != "$ANDROID_SDK_ROOT" ]; then
@@ -2595,9 +2604,29 @@ jobs:
               echo "Build com gradlew bem sucedido!"
               mkdir -p ../build-output
               cp app/build/outputs/apk/release/app-release.apk ../build-output/app.apk
+              echo "APK copiado para: ../build-output/app.apk"
+              ls -la ../build-output/
+              cd ..
+            elif [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+              echo "Build com gradlew gerou apenas APK de debug!"
+              mkdir -p ../build-output
+              cp app/build/outputs/apk/debug/app-debug.apk ../build-output/app.apk
+              echo "APK de debug copiado para: ../build-output/app.apk"
+              ls -la ../build-output/
               cd ..
             else
-              echo "Build com gradlew falhou."
+              echo "Build com gradlew falhou. Buscando APKs em locais alternativos..."
+              find . -name "*.apk" -type f
+              find_result=$?
+              if [ $find_result -eq 0 ]; then
+                apk_path=$(find . -name "*.apk" -type f | head -n 1)
+                if [ -n "$apk_path" ]; then
+                  mkdir -p ../build-output
+                  cp "$apk_path" ../build-output/app.apk
+                  echo "APK alternativo copiado para: ../build-output/app.apk"
+                  ls -la ../build-output/
+                fi
+              fi
               cd ..
             fi
           else
@@ -2605,8 +2634,18 @@ jobs:
             
             # Tentar exportar para um APK usando outra abordagem
             echo "Exportando com abordagem alternativa..."
+            
+            # Tentar método direto com Expo
+            echo "Tentando build direto com Expo..."
+            mkdir -p build-output
             npm install -g sharp-cli
-            npx expo export:embed --platform android || npx expo export --platform android
+            EXPO_DEBUG=true npx expo export:embed --platform android || npx expo export --platform android
+            
+            # Tentar com EAS build local como último recurso
+            if [ ! -f "build-output/app.apk" ]; then
+              echo "Tentando com EAS build local..."
+              EXPO_DEBUG=true npx eas-cli build --platform android --local --non-interactive --output=./build-output/app.apk || true
+            fi
             
             # Verificar se encontramos algum arquivo APK gerado
             find . -name "*.apk" -type f > build-output/apk-locations.txt
@@ -2633,14 +2672,54 @@ jobs:
           path: |
             build-output/app.apk
             build-output/*.apk
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+            dist/*.apk
+            build-output/build-diagnostic.txt
           if-no-files-found: warn
+          retention-days: 14
+
+      - name: 🔍 Verificação Final de APK
+        if: always()
+        run: |
+          echo "Realizando verificação final para localizar APKs..."
+          
+          # Garantir que o diretório build-output exista
+          mkdir -p build-output
+          
+          # Buscar recursivamente por APKs em todo o projeto
+          find . -name "*.apk" -type f > build-output/all-apk-locations.txt
+          
+          if [ -s build-output/all-apk-locations.txt ]; then
+            echo "📱 APKs encontrados no projeto:"
+            cat build-output/all-apk-locations.txt
+            
+            # Copiar o primeiro APK encontrado para build-output se necessário
+            if [ ! -f build-output/app.apk ] && [ ! -f build-output/*.apk ]; then
+              first_apk=$(head -n 1 build-output/all-apk-locations.txt)
+              if [ -n "$first_apk" ]; then
+                echo "Copiando APK encontrado para build-output..."
+                cp "$first_apk" build-output/final-app.apk
+                echo "✅ APK copiado para build-output/final-app.apk"
+              fi
+            fi
+          else
+            echo "❌ Nenhum APK foi encontrado em qualquer local do projeto."
+          fi
+          
+          echo "Conteúdo do diretório build-output:"
+          ls -la build-output/
 
       - name: ✅ Build Status
         if: always()
         run: |
           echo "Build finalizado."
           echo "Verificando diretório de saída:"
-          ls -la build-output/ || true
+          
+          # Criar o diretório de saída se não existir
+          mkdir -p build-output
+          
+          ls -la build-output/ || echo "Diretório build-output existe mas está vazio"
           
           # Caso não exista nenhum APK, criar um relatório de erro detalhado
           if [ ! -f build-output/app.apk ] && [ ! -f build-output/*.apk ]; then
@@ -2648,7 +2727,7 @@ jobs:
             echo "Tentando buscar em outros locais potenciais..."
             
             # Verificar locais alternativos onde o APK poderia estar
-            find . -name "*.apk" -type f > build-output/apk-locations.txt
+            find . -name "*.apk" -type f > build-output/apk-locations.txt || echo "Nenhum APK encontrado"
             
             # Verificar se algum APK foi encontrado e copiar para build-output
             if [ -s build-output/apk-locations.txt ]; then
