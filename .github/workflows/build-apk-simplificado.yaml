@@ -1,4 +1,4 @@
-name: 🚀 Build APK - Corte de Matos (COMPLETO)
+name: 🚀 Build APK - Corte de Matos (Simplificado)
 
 on:
   workflow_dispatch:
@@ -676,13 +676,14 @@ jobs:
                               ]}>
                                 {selectedVao.dataNecessidade}
                                 {isLate(selectedVao.dataNecessidade) && selectedVao.status !== 'concluido' && ' ⚠️ ATRASADO'}
+                                {isUrgent(selectedVao.dataNecessidade) && !isLate(selectedVao.dataNecessidade) && ' 🕐 URGENTE'}
                               </Text>
                             </View>
                             
                             <View style={styles.modalSection}>
                               <Text style={styles.modalLabel}>Status atual:</Text>
                               <View style={[
-                                styles.statusBadge,
+                                styles.statusBadge, 
                                 { backgroundColor: getStatusColor(selectedVao.status) }
                               ]}>
                                 <Text style={styles.statusBadgeText}>{getStatusText(selectedVao.status)}</Text>
@@ -706,28 +707,18 @@ jobs:
                           
                           <View style={styles.modalActions}>
                             {selectedVao.status === 'pendente' && (
-                              <>
-                                <TouchableOpacity
-                                  style={[styles.actionButton, styles.startButton]}
-                                  onPress={() => updateVaoStatus(selectedVao.id, 'iniciado')}
-                                >
-                                  <MaterialIcons name="play-arrow" size={18} color="white" />
-                                  <Text style={styles.actionButtonText}>Iniciar</Text>
-                                </TouchableOpacity>
-                                
-                                <TouchableOpacity
-                                  style={[styles.actionButton, styles.completeButton]}
-                                  onPress={() => updateVaoStatus(selectedVao.id, 'concluido')}
-                                >
-                                  <MaterialIcons name="check" size={18} color="white" />
-                                  <Text style={styles.actionButtonText}>Concluir</Text>
-                                </TouchableOpacity>
-                              </>
+                              <TouchableOpacity 
+                                style={[styles.actionButton, styles.startButton]} 
+                                onPress={() => updateVaoStatus(selectedVao.id, 'iniciado')}
+                              >
+                                <MaterialIcons name="play-arrow" size={18} color="white" />
+                                <Text style={styles.actionButtonText}>Iniciar</Text>
+                              </TouchableOpacity>
                             )}
                             
-                            {selectedVao.status === 'iniciado' && (
-                              <TouchableOpacity
-                                style={[styles.actionButton, styles.completeButton]}
+                            {(selectedVao.status === 'pendente' || selectedVao.status === 'iniciado') && (
+                              <TouchableOpacity 
+                                style={[styles.actionButton, styles.completeButton]} 
                                 onPress={() => updateVaoStatus(selectedVao.id, 'concluido')}
                               >
                                 <MaterialIcons name="check" size={18} color="white" />
@@ -1036,12 +1027,6 @@ jobs:
           });
           EOF
 
-      - name: 🔐 Authenticate with Expo
-        run: |
-          echo "🔐 Autenticando com Expo..."
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
       - name: 🖼️ Garantir assets do app
         run: |
           mkdir -p assets
@@ -1120,10 +1105,10 @@ jobs:
                   "foregroundImage": "./assets/adaptive-icon.png",
                   "backgroundColor": "#4CAF50"
                 },
-                "package": "com.pikulito.cortematos",
+                "package": "com.managematos.cortepoda",
                 "versionCode": 6,
-                "compileSdkVersion": 34,
-                "targetSdkVersion": 34,
+                "compileSdkVersion": 33,
+                "targetSdkVersion": 33,
                 "permissions": []
               },
               "plugins": [
@@ -1131,37 +1116,30 @@ jobs:
                   "expo-build-properties",
                   {
                     "android": {
-                      "compileSdkVersion": 34,
-                      "targetSdkVersion": 34,
-                      "buildToolsVersion": "34.0.0"
+                      "compileSdkVersion": 33,
+                      "targetSdkVersion": 33,
+                      "buildToolsVersion": "33.0.0"
                     }
                   }
                 ]
               ],
               "extra": {
                 "eas": {
-                  "projectId": "84ea4587-b864-4560-a167-05855903311c"
+                  "projectId": "cortematos"
                 }
-              },
-              "runtimeVersion": {
-                "policy": "sdkVersion"
               },
               "updates": {
                 "fallbackToCacheTimeout": 0,
                 "enabled": false
               },
-              "owner": "pikulito",
               "experiments": {
                 "tsconfigPaths": true
-              },
-              "packagerOpts": {
-                "sourceExts": ["js", "jsx", "ts", "tsx", "json"]
               }
             }
           }
           EOF
 
-      - name: � Garantir babel.config.js
+      - name: 📝 Garantir babel.config.js
         run: |
           cat > babel.config.js << 'EOF'
           module.exports = function(api) {
@@ -1281,33 +1259,6 @@ jobs:
           echo "Prebuild manual concluído."
           ls -la
 
-      - name: � Garantir eas.json
-        run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
-            KEYSTORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
-            KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
-            KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
-          else
-            keytool -genkeypair -v -keystore my-release-key.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload -storepass "temppassword" -keypass "temppassword" -dname "CN=Example, OU=Android, O=Example, L=Example, S=Example, C=US"
-            KEYSTORE_PASSWORD="temppassword"
-            KEY_ALIAS="upload"
-            KEY_PASSWORD="temppassword"
-          fi
-          echo '{
-            "android": {
-              "keystore": {
-                "keystorePath": "./my-release-key.jks",
-                "keystorePassword": "'$KEYSTORE_PASSWORD'",
-                "keyAlias": "'$KEY_ALIAS'",
-                "keyPassword": "'$KEY_PASSWORD'"
-              }
-            }
-          }' > credentials.json
-          cat credentials.json
-
-
-
       - name: 🔨 Build Corte de Matos APK
         run: |
           echo "🔨 Build APK completo do Corte de Matos..."
@@ -1317,43 +1268,24 @@ jobs:
           
           # Verificar arquivos críticos
           ls -la
-          echo "Verificando credenciais:"
-          cat credentials.json
-          echo "Verificando app.json:"
-          cat app.json
-          echo "Verificando eas.json:"
-          cat eas.json
+          echo "Verificando arquivos de configuração:"
+          ls -la *.json
           
           # Exportar variáveis para evitar problemas com prebuild
           export EAS_NO_VCS=1
           export CI=1
           export EAS_LOCAL_BUILD_SKIP_CLEANUP=1
           export EAS_LOCAL_BUILD_ARTIFACTS_DIR=./build-output
-          export EXPO_DEBUG=1
           
-          echo "Usando perfil de build: ${{ github.event.inputs.profile || 'preview' }}"
+          echo "Usando profile de build: ${{ github.event.inputs.profile || 'preview' }}"
           
-          # Usar uma abordagem alternativa para o build
-          echo "Tentando prebuild e build manual..."
-          
-          # Primeiramente, gerar o projeto nativo manualmente
+          # Gerar o projeto nativo manualmente
           echo "Executando prebuild manual com expo..."
           npx expo prebuild --platform android --clean
           
           # Verificar se o prebuild foi bem sucedido
           if [ -d "android" ]; then
             echo "Prebuild bem sucedido! Prosseguindo com o build..."
-            
-            # Copiar as configurações de Gradle
-            echo "Copiando configurações de Gradle..."
-            cp android.gradle.properties android/ || true
-            
-            # Verificar e corrigir problemas comuns de Gradle
-            if [ -f "android/gradle.properties" ]; then
-              echo "Atualizando gradle.properties com configurações necessárias..."
-              echo "android.disableAutomaticComponentCreation=true" >> android/gradle.properties
-              echo "org.gradle.jvmargs=-Xmx4g -XX:MaxPermSize=2048m -XX:+HeapDumpOnOutOfMemoryError" >> android/gradle.properties
-            fi
             
             # Aplicar template de build.gradle personalizado se existir
             if [ -f "android/app/build.gradle.template" ] && [ -f "android/app/build.gradle" ]; then
@@ -1367,7 +1299,7 @@ jobs:
               chmod +x android/gradlew
             fi
             
-            # Agora vamos pular o EAS e construir diretamente com gradlew
+            # Construir APK diretamente com gradlew
             echo "Construindo APK diretamente com gradlew..."
             cd android
             # Garantir que o gradle wrapper tenha permissão de execução
@@ -1389,134 +1321,27 @@ jobs:
           else
             echo "Prebuild falhou! Tentando estratégia alternativa..."
             
-            # Criar um APK básico com outra abordagem
-            echo "Instalando ferramentas Android..."
-            sudo apt-get install -y --no-install-recommends openjdk-11-jdk-headless
-            
             # Tentar exportar para um APK usando outra abordagem
             echo "Exportando com abordagem alternativa..."
             npm install -g sharp-cli
-            npx expo export:embed --platform android
+            npx expo export:embed --platform android || npx expo export --platform android
             
-            # Tentar gerar APK de maneira simplificada
-            mkdir -p android/app/src/main/res
-            mkdir -p android/app/src/main/java/com/managematos/cortepoda
-            
-            # Gerar um MainActivity básico
-            cat > android/app/src/main/java/com/managematos/cortepoda/MainActivity.java << 'EOF'
-            package com.managematos.cortepoda;
-            
-            import android.os.Bundle;
-            import com.facebook.react.ReactActivity;
-            import com.facebook.react.ReactActivityDelegate;
-            
-            public class MainActivity extends ReactActivity {
-                @Override
-                protected String getMainComponentName() {
-                    return "CorteMatos";
-                }
-                
-                @Override
-                protected void onCreate(Bundle savedInstanceState) {
-                    super.onCreate(savedInstanceState);
-                }
-            }
-            EOF
-            
-            # Criar build.gradle na raiz do projeto
-            cat > android/build.gradle << 'EOF'
-            buildscript {
-                ext {
-                    buildToolsVersion = "33.0.0"
-                    minSdkVersion = 21
-                    compileSdkVersion = 33
-                    targetSdkVersion = 33
-                }
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-                dependencies {
-                    classpath("com.android.tools.build:gradle:7.3.1")
-                }
-            }
-            
-            allprojects {
-                repositories {
-                    google()
-                    mavenCentral()
-                }
-            }
-            EOF
-            
-            # Gerar um AndroidManifest.xml básico
-            cat > android/app/src/main/AndroidManifest.xml << 'EOF'
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                android:name=".MainApplication"
-                android:label="Corte de Matos"
-                android:icon="@mipmap/ic_launcher"
-                android:roundIcon="@mipmap/ic_launcher_round"
-                android:allowBackup="false"
-                android:theme="@style/AppTheme">
-                <activity
-                  android:name=".MainActivity"
-                  android:label="Corte de Matos"
-                  android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
-                  android:launchMode="singleTask"
-                  android:windowSoftInputMode="adjustResize"
-                  android:exported="true">
-                  <intent-filter>
-                    <action android:name="android.intent.action.MAIN" />
-                    <category android:name="android.intent.category.LAUNCHER" />
-                  </intent-filter>
-                </activity>
-              </application>
-            </manifest>
-            EOF
-            
-            # Tentar build básico
-            cd android
-            if [ -f "./gradlew" ]; then
-              chmod +x ./gradlew
-              ./gradlew assembleRelease --stacktrace
-            fi
-            cd ..
-            
-            # Se o export funcionar, tentar construir com gradlew diretamente
-            if [ -d "android" ]; then
-              echo "Export funcionou! Tentando build com gradlew..."
-              cd android
+            # Verificar se encontramos algum arquivo APK gerado
+            find . -name "*.apk" -type f > build-output/apk-locations.txt
+            if [ -s build-output/apk-locations.txt ]; then
+              echo "APKs encontrados em outros locais:"
+              cat build-output/apk-locations.txt
               
-              # Garantir que o gradle wrapper tenha permissão de execução
-              chmod +x ./gradlew
-              
-              # Atualizar gradle.properties para resolver problema de SoftwareComponent
-              echo "android.disableAutomaticComponentCreation=true" >> gradle.properties
-              
-              # Tentar construir com gradlew diretamente
-              ./gradlew assembleRelease --info
-              
-              # Verificar se o APK foi gerado
-              if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
-                echo "Build com gradlew bem sucedido!"
-                mkdir -p ../build-output
-                cp app/build/outputs/apk/release/app-release.apk ../build-output/app.apk
-                cd ..
-              else
-                echo "Build com gradlew falhou."
-                cd ..
+              # Copiar o primeiro APK encontrado para build-output
+              first_apk=$(head -n 1 build-output/apk-locations.txt)
+              if [ -n "$first_apk" ]; then
+                cp "$first_apk" build-output/app.apk
+                echo "APK recuperado e copiado para build-output/app.apk"
               fi
             else
-              echo "Export falhou também."
+              echo "Nenhum APK foi encontrado."
             fi
-            cp -r dist/* build-output/
-            
-            echo "Build alternativo concluído!"
           fi
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📤 Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -1584,4 +1409,4 @@ jobs:
             ls -la build-output/*.apk || true
           fi
           
-          echo "Baixe o APK nos artefatos ou pelo dashboard do Expo."
+          echo "Baixe o APK nos artefatos."
