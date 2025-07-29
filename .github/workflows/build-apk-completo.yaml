@@ -986,6 +986,28 @@ jobs:
             cp assets/icon.png assets/splash.png
             cp assets/icon.png assets/favicon.png
           fi
+          
+      - name: 🔧 Preparar ambiente Android
+        run: |
+          echo "🔧 Instalando dependências do Android SDK..."
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            file \
+            curl \
+            sudo \
+            git
+          
+          # Configuração do ANDROID_HOME e Android SDK
+          export ANDROID_HOME=$HOME/android-sdk
+          mkdir -p $ANDROID_HOME
+          
+          # Definir variáveis de ambiente para comandos EAS
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> $GITHUB_ENV
+          
+          # Instalar Android build tools necessários para o EAS
+          sudo npm install -g turtle-cli --unsafe-perm
 
       - name: 📝 Garantir app.json
         run: |
@@ -1102,13 +1124,18 @@ jobs:
           echo "Verificando eas.json:"
           cat eas.json
           
-          # Configurar EAS
-          npx eas-cli config --non-interactive
-          
           # Executar o build com mais flags para torná-lo mais resiliente
           export EAS_NO_VCS=1
           export CI=1
-          npx eas-cli build --platform android --profile ${{ github.event.inputs.profile }} --local --output=./build-output/app.apk --non-interactive
+          echo "Usando perfil de build: ${{ github.event.inputs.profile }}"
+          
+          # Construir APK usando o comando de build do EAS CLI
+          npx eas-cli build \
+            --platform android \
+            --profile=${{ github.event.inputs.profile || 'preview' }} \
+            --local \
+            --output=./build-output/app.apk \
+            --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
