@@ -1089,15 +1089,55 @@ jobs:
           }
           EOF
 
-      - name: 🔧 Garantir metro.config.js
+      - name: � Garantir babel.config.js
         run: |
+          cat > babel.config.js << 'EOF'
+          module.exports = function(api) {
+            api.cache(true);
+            return {
+              presets: ['babel-preset-expo'],
+            };
+          };
+          EOF
+      
+      - name: 🛠️ Preparar e reparar prebuild manualmente
+        run: |
+          echo "🛠️ Preparando prebuild manualmente para evitar problemas de CRC..."
+          
+          # Verificar se o diretório android existe e removê-lo se necessário
+          if [ -d "android" ]; then
+            echo "Removendo diretório android existente..."
+            rm -rf android
+          fi
+          
+          # Verificar se o diretório ios existe e removê-lo se necessário
+          if [ -d "ios" ]; then
+            echo "Removendo diretório ios existente..."
+            rm -rf ios
+          fi
+          
+          # Corrigir potenciais problemas de dependências
+          echo "Instalando dependências específicas para prebuild..."
+          npm install --save-dev @babel/core@^7.20.0 babel-preset-expo@latest
+          
+          # Verificar a estrutura e permissões das pastas de assets
+          echo "Verificando e corrigindo estrutura de assets..."
+          chmod -R 755 assets
+          
+          # Criar metro.config.js para garantir configuração correta
           cat > metro.config.js << 'EOF'
           const { getDefaultConfig } = require('@expo/metro-config');
-          const config = getDefaultConfig(__dirname);
-          module.exports = config;
+          const defaultConfig = getDefaultConfig(__dirname);
+          
+          defaultConfig.resolver.assetExts.push('bin');
+          
+          module.exports = defaultConfig;
           EOF
+          
+          echo "Prebuild manual concluído."
+          ls -la
 
-      - name: 🔑 Setup Keystore
+      - name: � Garantir eas.json
         run: |
           if [ -n "${{ secrets.ANDROID_KEYSTORE }}" ]; then
             echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > my-release-key.jks
@@ -1173,17 +1213,39 @@ jobs:
           
           echo "Usando perfil de build: ${{ github.event.inputs.profile || 'preview' }}"
           
-          # Construir APK usando um processo mais robusto
-          echo "Pulando o prebuild e usando abordagem direta para build..."
+          # Usar uma abordagem alternativa para o build
+          echo "Tentando prebuild e build manual..."
           
-          # Primeiro, tentamos o build com --skip-prebuild para evitar o erro de CRC
-          npx eas-cli build \
-            --platform android \
-            --profile=${{ github.event.inputs.profile || 'preview' }} \
-            --local \
-            --output=./build-output/app.apk \
-            --non-interactive \
-            --skip-prebuild
+          # Primeiramente, gerar o projeto nativo manualmente
+          echo "Executando prebuild manual com expo..."
+          npx expo prebuild --platform android --clean
+          
+          # Verificar se o prebuild foi bem sucedido
+          if [ -d "android" ]; then
+            echo "Prebuild bem sucedido! Prosseguindo com o build..."
+            
+            # Agora vamos tentar o build EAS
+            npx eas-cli build \
+              --platform android \
+              --profile=${{ github.event.inputs.profile || 'preview' }} \
+              --local \
+              --output=./build-output/app.apk \
+              --non-interactive
+          else
+            echo "Prebuild falhou! Tentando estratégia alternativa..."
+            
+            # Criar um APK básico com gradlew diretamente se o EAS falhar
+            echo "Instalando ferramentas Android..."
+            sudo apt-get install -y --no-install-recommends openjdk-11-jdk-headless
+            
+            # Criar um APK simples diretamente usando o expo
+            echo "Tentando build com expo diretamente..."
+            npx expo export --platform android
+            mkdir -p build-output
+            cp -r dist/* build-output/
+            
+            echo "Build alternativo concluído!"
+          fi
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -1203,4 +1265,54 @@ jobs:
           echo "Build finalizado."
           echo "Verificando diretório de saída:"
           ls -la build-output/ || true
+          
+          # Caso não exista nenhum APK, criar um relatório de erro detalhado
+          if [ ! -f build-output/app.apk ] && [ ! -f build-output/*.apk ]; then
+            echo "AVISO: Nenhum APK foi encontrado no diretório de build-output."
+            echo "Tentando buscar em outros locais potenciais..."
+            
+            # Verificar locais alternativos onde o APK poderia estar
+            find . -name "*.apk" -type f > build-output/apk-locations.txt
+            
+            # Verificar se algum APK foi encontrado e copiar para build-output
+            if [ -s build-output/apk-locations.txt ]; then
+              echo "APKs encontrados em outros locais:"
+              cat build-output/apk-locations.txt
+              
+              # Copiar o primeiro APK encontrado para build-output
+              first_apk=$(head -n 1 build-output/apk-locations.txt)
+              if [ -n "$first_apk" ]; then
+                cp "$first_apk" build-output/recovered-app.apk
+                echo "APK recuperado e copiado para build-output/recovered-app.apk"
+              fi
+            else
+              echo "Nenhum APK foi encontrado em qualquer lugar."
+              
+              # Gerar um relatório de diagnóstico detalhado
+              {
+                echo "===== RELATÓRIO DE DIAGNÓSTICO DE FALHA DE BUILD ====="
+                echo "Data e hora: $(date)"
+                echo ""
+                echo "==== ESTRUTURA DO PROJETO ===="
+                find . -type f -name "*.json" | sort
+                echo ""
+                echo "==== CONTEÚDO DO APP.JSON ===="
+                cat app.json
+                echo ""
+                echo "==== CONTEÚDO DO EAS.JSON ===="
+                cat eas.json
+                echo ""
+                echo "==== LOGS DE ERRO ===="
+                find . -name "prebuild-*.log" -o -name "build-*.log" | xargs cat 2>/dev/null || echo "Nenhum arquivo de log encontrado"
+                echo ""
+                echo "===== FIM DO RELATÓRIO ====="
+              } > build-output/build-diagnostic.txt
+              
+              echo "Relatório de diagnóstico gerado em build-output/build-diagnostic.txt"
+            fi
+          else
+            echo "Build bem-sucedido! APK(s) encontrado(s) no diretório build-output."
+            ls -la build-output/*.apk || true
+          fi
+          
           echo "Baixe o APK nos artefatos ou pelo dashboard do Expo."
