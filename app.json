@@ -1,36 +1,45 @@
 {
   "expo": {
     "name": "Corte de Matos",
-    "slug": "corte-matos-app",
+    "slug": "corte-poda",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android", "web"],
-    "projectId": "84ea4587-b864-4560-a167-05855903311c",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2e7d32"
+      "backgroundColor": "#2E7D32"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cortematosapp.ios"
+      "bundleIdentifier": "com.exemplo.cortepoda"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#2e7d32"
+        "backgroundColor": "#2E7D32"
       },
-      "package": "com.cortematosapp.app",
-      "versionCode": 1,
-      "permissions": [
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_EXTERNAL_STORAGE"
-      ]
+      "package": "com.exemplo.cortepoda"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a235cc25-bdb0-4ed7-9db8-7a2d55723427"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/corte-poda-project",
+      "fallbackToCacheTimeout": 0,
+      "enabled": true
     }
   }
 }
