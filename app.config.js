@@ -38,7 +38,7 @@ module.exports = {
   },
   extra: {
     eas: {
-      projectId: process.env.EAS_PROJECT_ID || ""
+      projectId: "a235cc25-bdb0-4ed7-9db8-7a2d55723427"
     }
   },
   plugins: [
