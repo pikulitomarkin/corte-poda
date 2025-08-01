@@ -336,6 +336,8 @@ export default function App() {
               <th>Área</th>
               <th>Prazo</th>
               <th>Status</th>
+              <th>Iniciado em</th>
+              <th>Concluído em</th>
             </tr>
             ${matos.map(vao => `
               <tr>
@@ -344,6 +346,8 @@ export default function App() {
                 <td>${vao.area}</td>
                 <td>${new Date(vao.dataNecessidade).toLocaleDateString('pt-BR')}</td>
                 <td class="${vao.status}">${vao.status.toUpperCase()}</td>
+                <td>${vao.dataInicio || '-'}</td>
+                <td>${vao.dataConclusao || '-'}</td>
               </tr>
             `).join('')}
           </table>
@@ -446,12 +450,21 @@ export default function App() {
   const alterarStatus = (id, novoStatus) => {
     const novosVaos = matos.map(vao => {
       if (vao.id === id) {
-        const agora = new Date().toISOString().split('T')[0];
+        const agora = new Date();
+        const dataHoraCompleta = agora.toLocaleString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        
         return {
           ...vao,
           status: novoStatus,
-          dataInicio: novoStatus === 'iniciado' ? agora : vao.dataInicio,
-          dataConclusao: novoStatus === 'concluido' ? agora : null,
+          dataInicio: novoStatus === 'iniciado' ? dataHoraCompleta : vao.dataInicio,
+          dataConclusao: novoStatus === 'concluido' ? dataHoraCompleta : vao.dataConclusao,
           atualizadoPor: usuario.username
         };
       }
@@ -943,7 +956,12 @@ export default function App() {
           
           {/* Lista de Vãos */}
           <ScrollView style={styles.lista}>
-            {matos.map((vao) => {
+            {matos
+              .filter(vao => {
+                // Admin vê todos os vãos, usuário comum não vê os concluídos
+                return isAdmin() || vao.status !== 'concluido';
+              })
+              .map((vao) => {
               // Calcular status do prazo
               const hoje = new Date();
               const dataNecessidade = new Date(vao.dataNecessidade);
@@ -1034,6 +1052,27 @@ export default function App() {
                         </Text>
                       )}
                     </Text>
+                    
+                    {/* Informações de controle para Admin */}
+                    {isAdmin() && (
+                      <View style={styles.adminControlInfo}>
+                        {vao.dataInicio && (
+                          <Text style={styles.adminInfoText}>
+                            ▶️ Iniciado em: {vao.dataInicio}
+                          </Text>
+                        )}
+                        {vao.dataConclusao && (
+                          <Text style={styles.adminInfoText}>
+                            ✅ Concluído em: {vao.dataConclusao}
+                          </Text>
+                        )}
+                        {vao.atualizadoPor && vao.status !== 'pendente' && (
+                          <Text style={styles.adminInfoText}>
+                            👤 Por: {vao.atualizadoPor}
+                          </Text>
+                        )}
+                      </View>
+                    )}
                   </View>
                   
                   <View style={styles.statusContainer}>
@@ -1041,7 +1080,8 @@ export default function App() {
                       ● {vao.status.toUpperCase()}
                     </Text>
                     
-                    {vao.atualizadoPor && vao.status !== 'pendente' && (
+                    {/* Mostrar "Atualizado por" apenas para usuários comuns (admin já vê nas informações detalhadas) */}
+                    {!isAdmin() && vao.atualizadoPor && vao.status !== 'pendente' && (
                       <Text style={styles.updatedByText}>
                         Atualizado por: {vao.atualizadoPor}
                       </Text>
@@ -1149,7 +1189,7 @@ export default function App() {
           {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              Corte de Matos v1.1 - Total: {matos.length} vãos
+              Corte de Matos v1.1 - {isAdmin() ? `Total: ${matos.length}` : `Visíveis: ${matos.filter(v => v.status !== 'concluido').length}`} vãos
               {isAdmin() ? ' | Modo Admin' : ''}
             </Text>
           </View>
@@ -1986,32 +2026,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // Estilo especial para data de necessidade
-  vaoDataNecessidade: {
-    fontWeight: '500',
+  // Informações de controle para Admin
+  adminControlInfo: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF6F00',
   },
-
-  // Textos de prazo com cores específicas
-  prazoTexto: {
-    fontWeight: 'bold',
+  adminInfoText: {
     fontSize: 12,
-  },
-  prazoAtrasado: {
-    color: '#F44336',
-  },
-  prazoUrgente: {
-    color: '#FF9800',
-  },
-  prazoProximo: {
-    color: '#FFC107',
-  },
-
-  // Estilos para cards de diagnóstico
-  diagnosticCard: {
-    borderLeftColor: '#9C27B0',
-  },
-  dateTestCard: {
-    borderLeftColor: '#00BCD4',
+    color: '#495057',
+    marginBottom: 3,
+    fontWeight: '500',
   },
 
   // Menu Principal
