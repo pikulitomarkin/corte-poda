@@ -648,6 +648,12 @@ export default function App() {
         <SafeAreaView style={styles.mainContainer}>
           <StatusBar style="light" backgroundColor="#1B5E20" />
           
+          <ScrollView 
+            style={styles.mainScrollView}
+            showsVerticalScrollIndicator={false}
+            bounces={true}
+          >
+          
           {/* Header Moderno */}
           <LinearGradient
             colors={['#1B5E20', '#2E7D32']}
@@ -1107,6 +1113,8 @@ export default function App() {
               {isAdmin() ? ' | Modo Admin' : ''}
             </Text>
           </View>
+          
+          </ScrollView>
         </SafeAreaView>
       ) : (
         <View style={styles.loadingContainer}>
@@ -1603,12 +1611,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
-  // ===== ESTILOS DOS MENUS SOFISTICADOS =====
-  
-  // Menu Principal
-  mainContainer: {
+  mainScrollView: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   
   // Header Moderno do Usuário
@@ -1720,7 +1724,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statIconText: {
-    fontSize: 16,
+    fontSize: 20,
   },
   statNumber: {
     fontSize: 20,
@@ -1837,7 +1841,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   adminActionIconText: {
-    fontSize: 20,
+    fontSize: 16,
   },
   adminActionTitle: {
     fontSize: 14,
@@ -1968,5 +1972,114 @@ const styles = StyleSheet.create({
   },
   dateTestCard: {
     borderLeftColor: '#00BCD4',
+  },
+
+  // Menu Principal
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  mainScrollView: {
+    flex: 1,
+  },
+  
+  // Header Moderno Styles
+  modernHeader: {
+    paddingTop: 40,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  profileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  profileAvatar: {
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  profileIcon: {
+    fontSize: 20,
+    color: '#ffffff',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 2,
+  },
+  usernameText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  roleContainer: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  roleText: {
+    fontSize: 11,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  modernLogoutButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  logoutGradient: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutIcon: {
+    fontSize: 18,
+    color: '#ffffff',
+  },
+  statusBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '500',
+  },
+  lastSyncText: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    marginLeft: 4,
   },
 });
