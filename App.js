@@ -510,50 +510,131 @@ export default function App() {
   // Se não estiver logado, mostrar tela de login
   if (!logado) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" backgroundColor="#2E7D32" />
+      <SafeAreaView style={styles.loginSafeArea}>
+        <StatusBar style="light" backgroundColor="#1B5E20" />
         
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.loginContainer}
+        {/* Fundo com gradiente */}
+        <LinearGradient
+          colors={['#1B5E20', '#2E7D32', '#388E3C']}
+          style={styles.loginGradientBackground}
         >
-          <View style={styles.loginHeader}>
-            <Text style={styles.loginTitle}>🌿 Corte de Matos</Text>
-            <Text style={styles.loginSubtitle}>Sistema de Gestão</Text>
-          </View>
-          
-          <View style={styles.loginForm}>
-            {erroLogin ? (
-              <Text style={styles.erroLogin}>{erroLogin}</Text>
-            ) : null}
-            
-            <TextInput
-              style={styles.loginInput}
-              placeholder="Nome de usuário"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-            
-            <TextInput
-              style={styles.loginInput}
-              placeholder="Senha"
-              value={senha}
-              onChangeText={setSenha}
-              secureTextEntry={true}
-            />
-            
-            <TouchableOpacity style={styles.loginButton} onPress={fazerLogin}>
-              <Text style={styles.loginButtonText}>Entrar</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.loginInfo}>
-              <Text style={styles.loginInfoText}>
-                Use as credenciais fornecidas pelo administrador
-              </Text>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.loginKeyboardContainer}
+          >
+            <View style={styles.loginContentContainer}>
+              
+              {/* Header com logo e título */}
+              <View style={styles.loginHeaderSection}>
+                <View style={styles.logoContainer}>
+                  <LinearGradient
+                    colors={['#4CAF50', '#66BB6A']}
+                    style={styles.logoCircle}
+                  >
+                    <Text style={styles.logoIcon}>🌿</Text>
+                  </LinearGradient>
+                </View>
+                
+                <Text style={styles.appTitle}>Corte de Matos</Text>
+                <Text style={styles.appSubtitle}>Sistema Inteligente de Gestão</Text>
+                <View style={styles.titleUnderline} />
+              </View>
+              
+              {/* Formulário de login */}
+              <View style={styles.loginFormCard}>
+                <View style={styles.loginFormHeader}>
+                  <Text style={styles.loginFormTitle}>Acesso ao Sistema</Text>
+                  <Text style={styles.loginFormSubtitle}>Entre com suas credenciais</Text>
+                </View>
+                
+                {erroLogin ? (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorIcon}>⚠️</Text>
+                    <Text style={styles.errorText}>{erroLogin}</Text>
+                  </View>
+                ) : null}
+                
+                {/* Campo Usuário */}
+                <View style={styles.inputContainer}>
+                  <View style={styles.inputIconContainer}>
+                    <Text style={styles.inputIcon}>👤</Text>
+                  </View>
+                  <TextInput
+                    style={styles.modernInput}
+                    placeholder="Nome de usuário"
+                    placeholderTextColor="#9E9E9E"
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+                
+                {/* Campo Senha */}
+                <View style={styles.inputContainer}>
+                  <View style={styles.inputIconContainer}>
+                    <Text style={styles.inputIcon}>🔒</Text>
+                  </View>
+                  <TextInput
+                    style={styles.modernInput}
+                    placeholder="Senha"
+                    placeholderTextColor="#9E9E9E"
+                    value={senha}
+                    onChangeText={setSenha}
+                    secureTextEntry={true}
+                  />
+                </View>
+                
+                {/* Botão de Login */}
+                <TouchableOpacity 
+                  style={styles.modernLoginButton} 
+                  onPress={fazerLogin}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#4CAF50', '#66BB6A']}
+                    style={styles.loginButtonGradient}
+                  >
+                    <Text style={styles.modernLoginButtonText}>
+                      {carregando ? '⏳ Entrando...' : '🚀 Entrar'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                {/* Informações de acesso */}
+                <View style={styles.loginInfoSection}>
+                  <View style={styles.divider}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>Credenciais de Acesso</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                  
+                  <View style={styles.credentialsContainer}>
+                    <View style={styles.credentialItem}>
+                      <Text style={styles.credentialLabel}>👨‍💼 Usuário:</Text>
+                      <Text style={styles.credentialValue}>usuario / esul1234</Text>
+                    </View>
+                    
+                    <View style={styles.credentialItem}>
+                      <Text style={styles.credentialLabel}>🛠️ Admin:</Text>
+                      <Text style={styles.credentialValue}>admin / eletro1234</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+              
+              {/* Footer */}
+              <View style={styles.loginFooter}>
+                <Text style={styles.footerText}>
+                  © 2025 Sistema de Controle de Corte de Matos
+                </Text>
+                <Text style={styles.footerSubtext}>
+                  Versão 2.0 • Desenvolvido com ❤️
+                </Text>
+              </View>
+              
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </LinearGradient>
       </SafeAreaView>
     );
   }
@@ -894,66 +975,214 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#555'
   },
-  // Login
-  loginContainer: {
+  // ===== ESTILOS DE LOGIN SOFISTICADOS =====
+  loginSafeArea: {
+    flex: 1,
+    backgroundColor: '#1B5E20',
+  },
+  loginGradientBackground: {
+    flex: 1,
+  },
+  loginKeyboardContainer: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
   },
-  loginHeader: {
+  loginContentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
+  },
+  loginHeaderSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginTop: 20,
   },
-  loginTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#2E7D32',
-    marginBottom: 10,
+  logoContainer: {
+    marginBottom: 20,
   },
-  loginSubtitle: {
-    fontSize: 18,
-    color: '#555',
-  },
-  loginForm: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 15,
   },
-  loginInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 12,
+  logoIcon: {
+    fontSize: 40,
+  },
+  appTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 8,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  appSubtitle: {
     fontSize: 16,
+    color: '#E8F5E8',
+    textAlign: 'center',
     marginBottom: 15,
   },
-  loginButton: {
-    backgroundColor: '#2E7D32',
-    padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
+  titleUnderline: {
+    width: 60,
+    height: 3,
+    backgroundColor: '#4CAF50',
+    borderRadius: 2,
   },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 16,
+  loginFormCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 30,
+    marginHorizontal: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 25,
+  },
+  loginFormHeader: {
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  loginFormTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#1B5E20',
+    marginBottom: 5,
   },
-  loginInfo: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  loginInfoText: {
+  loginFormSubtitle: {
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },
-  erroLogin: {
-    color: 'red',
-    marginBottom: 15,
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderLeftWidth: 4,
+    borderLeftColor: '#F44336',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+  },
+  errorIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  errorText: {
+    color: '#D32F2F',
+    fontSize: 14,
+    flex: 1,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  inputIconContainer: {
+    width: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inputIcon: {
+    fontSize: 18,
+    color: '#6C757D',
+  },
+  modernInput: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingRight: 16,
+    fontSize: 16,
+    color: '#333',
+  },
+  modernLoginButton: {
+    borderRadius: 12,
+    marginTop: 10,
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loginButtonGradient: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modernLoginButtonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  loginInfoSection: {
+    marginTop: 30,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E9ECEF',
+  },
+  dividerText: {
+    marginHorizontal: 15,
+    fontSize: 12,
+    color: '#6C757D',
+    fontWeight: '500',
+  },
+  credentialsContainer: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 10,
+    padding: 15,
+  },
+  credentialItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  credentialLabel: {
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+  },
+  credentialValue: {
+    fontSize: 14,
+    color: '#28A745',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  loginFooter: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#E8F5E8',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  footerSubtext: {
+    fontSize: 11,
+    color: '#C8E6C9',
     textAlign: 'center',
   },
   // Header
