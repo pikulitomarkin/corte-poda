@@ -342,7 +342,7 @@ export default function App() {
                 <td>${vao.descricao}</td>
                 <td>${vao.localizacao}</td>
                 <td>${vao.area}</td>
-                <td>${vao.dataNecessidade}</td>
+                <td>${new Date(vao.dataNecessidade).toLocaleDateString('pt-BR')}</td>
                 <td class="${vao.status}">${vao.status.toUpperCase()}</td>
               </tr>
             `).join('')}
@@ -487,6 +487,46 @@ export default function App() {
     const iniciados = matos.filter(v => v.status === 'iniciado').length;
     const concluidos = matos.filter(v => v.status === 'concluido').length;
     return { pendentes, iniciados, concluidos };
+  };
+  
+  // Função para processar datas brasileiras de entrada
+  const processarDataBrasileira = (dataString) => {
+    if (!dataString) return new Date().toISOString().split('T')[0];
+    
+    // Remove espaços extras
+    const dataLimpa = dataString.trim();
+    
+    // Se já está no formato ISO (YYYY-MM-DD), retorna como está
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dataLimpa)) {
+      return dataLimpa;
+    }
+    
+    // Se está no formato brasileiro (DD/MM/YYYY ou DD/MM/YY)
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dataLimpa)) {
+      const [dia, mes, ano] = dataLimpa.split('/');
+      const anoCompleto = ano.length === 2 ? `20${ano}` : ano;
+      return `${anoCompleto}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+    }
+    
+    // Se está no formato DD-MM-YYYY
+    if (/^\d{1,2}-\d{1,2}-\d{2,4}$/.test(dataLimpa)) {
+      const [dia, mes, ano] = dataLimpa.split('-');
+      const anoCompleto = ano.length === 2 ? `20${ano}` : ano;
+      return `${anoCompleto}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+    }
+    
+    // Tenta fazer parsing direto
+    try {
+      const data = new Date(dataLimpa);
+      if (!isNaN(data.getTime())) {
+        return data.toISOString().split('T')[0];
+      }
+    } catch (error) {
+      console.log('Erro ao processar data:', dataLimpa, error);
+    }
+    
+    // Se não conseguiu processar, retorna data atual
+    return new Date().toISOString().split('T')[0];
   };
   
   // Verificar se é admin
