@@ -645,94 +645,253 @@ export default function App() {
   return (
     <>
       {isInitialized ? (
-        <SafeAreaView style={styles.container}>
-          <StatusBar style="light" backgroundColor="#2E7D32" />
+        <SafeAreaView style={styles.mainContainer}>
+          <StatusBar style="light" backgroundColor="#1B5E20" />
           
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>🌿 Corte de Matos</Text>
-              <Text style={styles.subtitle}>
-                Olá, {usuario.username} ({usuario.tipo === 'admin' ? 'Administrador' : 'Operador'})
-              </Text>
-            </View>
-            
-            {/* Botão de logout */}
-            <TouchableOpacity style={styles.logoutButton} onPress={fazerLogout}>
-              <Text style={styles.logoutText}>Sair</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Barra de sincronização */}
-          <View style={styles.syncBar}>
-            <View style={styles.syncStatus}>
-              <Text style={styles.syncStatusText}>
-                {conectado ? '🟢 Online' : '🔴 Offline'}
-              </Text>
-              {ultimaSincronizacao && (
-                <Text style={styles.syncTimeText}>
-                  Última sincronização: {ultimaSincronizacao}
-                </Text>
-              )}
-            </View>
-            
-            <TouchableOpacity 
-              style={styles.syncButton} 
-              onPress={sincronizarDados}
-              disabled={sincronizando}
-            >
-              {sincronizando ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.syncButtonText}>🔄 Sincronizar</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-          
-          {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>{stats.pendentes}</Text>
-              <Text style={styles.statLabel}>Pendentes</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statNumber, {color: '#FF9800'}]}>{stats.iniciados}</Text>
-              <Text style={styles.statLabel}>Iniciados</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={[styles.statNumber, {color: '#4CAF50'}]}>{stats.concluidos}</Text>
-              <Text style={styles.statLabel}>Concluídos</Text>
-            </View>
-          </View>
-          
-          {/* Botões de Ação - para admin */}
-          {isAdmin() && (
-            <View style={styles.actionContainer}>
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={() => setModalVisible(true)}
-              >
-                <Text style={styles.actionButtonText}>➕ Adicionar Vão</Text>
+          {/* Header Moderno */}
+          <LinearGradient
+            colors={['#1B5E20', '#2E7D32']}
+            style={styles.modernHeader}
+          >
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <View style={styles.profileContainer}>
+                  <LinearGradient
+                    colors={['#4CAF50', '#66BB6A']}
+                    style={styles.profileAvatar}
+                  >
+                    <Text style={styles.profileIcon}>
+                      {usuario.tipo === 'admin' ? '👨‍💼' : '👤'}
+                    </Text>
+                  </LinearGradient>
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.welcomeText}>Olá!</Text>
+                    <Text style={styles.usernameText}>{usuario.username}</Text>
+                    <View style={styles.roleContainer}>
+                      <Text style={styles.roleText}>
+                        {usuario.tipo === 'admin' ? '🛠️ Administrador' : '⚡ Operador'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+              
+              <TouchableOpacity style={styles.modernLogoutButton} onPress={fazerLogout}>
+                <LinearGradient
+                  colors={['#F44336', '#E57373']}
+                  style={styles.logoutGradient}
+                >
+                  <Text style={styles.logoutIcon}>🚪</Text>
+                </LinearGradient>
               </TouchableOpacity>
+            </View>
+            
+            {/* Status Bar */}
+            <View style={styles.statusBar}>
+              <View style={styles.connectionStatus}>
+                <View style={[styles.statusDot, { backgroundColor: conectado ? '#4CAF50' : '#F44336' }]} />
+                <Text style={styles.statusText}>
+                  {conectado ? 'Online' : 'Offline'}
+                </Text>
+                {ultimaSincronizacao && (
+                  <Text style={styles.lastSyncText}>
+                    • Sync: {ultimaSincronizacao.split(' ')[1]}
+                  </Text>
+                )}
+              </View>
               
               <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={importExcel}
-                disabled={importando}
+                style={styles.modernSyncButton} 
+                onPress={sincronizarDados}
+                disabled={sincronizando}
               >
-                {importando ? (
+                {sincronizando ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
-                  <Text style={styles.actionButtonText}>📁 Importar Excel</Text>
+                  <>
+                    <Text style={styles.syncIcon}>🔄</Text>
+                    <Text style={styles.syncText}>Sync</Text>
+                  </>
                 )}
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.actionButton} 
-                onPress={gerarRelatorio}
+            </View>
+          </LinearGradient>
+          
+          {/* Dashboard de Estatísticas */}
+          <View style={styles.dashboardContainer}>
+            <Text style={styles.dashboardTitle}>📊 Painel de Controle</Text>
+            
+            <View style={styles.statsGrid}>
+              <LinearGradient
+                colors={['#9E9E9E', '#BDBDBD']}
+                style={[styles.statCard, styles.pendentesCard]}
               >
-                <Text style={styles.actionButtonText}>📊 Gerar Relatório</Text>
-              </TouchableOpacity>
+                <View style={styles.statIcon}>
+                  <Text style={styles.statIconText}>⏳</Text>
+                </View>
+                <Text style={styles.statNumber}>{stats.pendentes}</Text>
+                <Text style={styles.statLabel}>Pendentes</Text>
+              </LinearGradient>
+              
+              <LinearGradient
+                colors={['#FF9800', '#FFB74D']}
+                style={[styles.statCard, styles.iniciadosCard]}
+              >
+                <View style={styles.statIcon}>
+                  <Text style={styles.statIconText}>⚡</Text>
+                </View>
+                <Text style={styles.statNumber}>{stats.iniciados}</Text>
+                <Text style={styles.statLabel}>Em Andamento</Text>
+              </LinearGradient>
+              
+              <LinearGradient
+                colors={['#4CAF50', '#66BB6A']}
+                style={[styles.statCard, styles.concluidosCard]}
+              >
+                <View style={styles.statIcon}>
+                  <Text style={styles.statIconText}>✅</Text>
+                </View>
+                <Text style={styles.statNumber}>{stats.concluidos}</Text>
+                <Text style={styles.statLabel}>Concluídos</Text>
+              </LinearGradient>
+            </View>
+            
+            {/* Barra de Progresso */}
+            <View style={styles.progressContainer}>
+              <Text style={styles.progressLabel}>Progresso Geral</Text>
+              <View style={styles.progressBarBackground}>
+                <View 
+                  style={[
+                    styles.progressBarFill, 
+                    { width: `${((stats.concluidos / (stats.pendentes + stats.iniciados + stats.concluidos)) * 100) || 0}%` }
+                  ]} 
+                />
+              </View>
+              <Text style={styles.progressText}>
+                {Math.round(((stats.concluidos / (stats.pendentes + stats.iniciados + stats.concluidos)) * 100) || 0)}% Concluído
+              </Text>
+            </View>
+          </View>
+          
+          {/* Menu de Administrador Sofisticado */}
+          {isAdmin() && (
+            <View style={styles.adminMenuContainer}>
+              <View style={styles.adminMenuHeader}>
+                <LinearGradient
+                  colors={['#FF6F00', '#FF8F00']}
+                  style={styles.adminBadge}
+                >
+                  <Text style={styles.adminBadgeText}>🛠️ ADMIN</Text>
+                </LinearGradient>
+                <Text style={styles.adminMenuTitle}>Painel Administrativo</Text>
+                <Text style={styles.adminMenuSubtitle}>Controle total do sistema</Text>
+              </View>
+              
+              <View style={styles.adminActionsGrid}>
+                <TouchableOpacity 
+                  style={styles.adminActionCard} 
+                  onPress={() => setModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#2196F3', '#42A5F5']}
+                    style={styles.adminActionGradient}
+                  >
+                    <View style={styles.adminActionIcon}>
+                      <Text style={styles.adminActionIconText}>➕</Text>
+                    </View>
+                    <Text style={styles.adminActionTitle}>Adicionar</Text>
+                    <Text style={styles.adminActionSubtitle}>Novo Vão</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.adminActionCard} 
+                  onPress={importExcel}
+                  disabled={importando}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={importando ? ['#9E9E9E', '#BDBDBD'] : ['#4CAF50', '#66BB6A']}
+                    style={styles.adminActionGradient}
+                  >
+                    <View style={styles.adminActionIcon}>
+                      {importando ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Text style={styles.adminActionIconText}>📁</Text>
+                      )}
+                    </View>
+                    <Text style={styles.adminActionTitle}>
+                      {importando ? 'Importando...' : 'Importar'}
+                    </Text>
+                    <Text style={styles.adminActionSubtitle}>CSV/Excel</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.adminActionCard} 
+                  onPress={gerarRelatorio}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#9C27B0', '#BA68C8']}
+                    style={styles.adminActionGradient}
+                  >
+                    <View style={styles.adminActionIcon}>
+                      <Text style={styles.adminActionIconText}>📊</Text>
+                    </View>
+                    <Text style={styles.adminActionTitle}>Relatório</Text>
+                    <Text style={styles.adminActionSubtitle}>Gerar PDF</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.adminActionCard} 
+                  onPress={() => Alert.alert('Em Breve', 'Funcionalidade em desenvolvimento')}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={['#FF5722', '#FF7043']}
+                    style={styles.adminActionGradient}
+                  >
+                    <View style={styles.adminActionIcon}>
+                      <Text style={styles.adminActionIconText}>⚙️</Text>
+                    </View>
+                    <Text style={styles.adminActionTitle}>Configurações</Text>
+                    <Text style={styles.adminActionSubtitle}>Sistema</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+              
+              {/* Estatísticas Avançadas para Admin */}
+              <View style={styles.adminStatsContainer}>
+                <Text style={styles.adminStatsTitle}>📈 Métricas Avançadas</Text>
+                <View style={styles.adminStatsRow}>
+                  <View style={styles.adminStatItem}>
+                    <Text style={styles.adminStatNumber}>{matos.length}</Text>
+                    <Text style={styles.adminStatLabel}>Total de Vãos</Text>
+                  </View>
+                  <View style={styles.adminStatItem}>
+                    <Text style={[styles.adminStatNumber, { color: '#F44336' }]}>
+                      {matos.filter(v => {
+                        const dias = Math.ceil((new Date(v.dataNecessidade) - new Date()) / (1000 * 60 * 60 * 24));
+                        return dias < 0 && v.status !== 'concluido';
+                      }).length}
+                    </Text>
+                    <Text style={styles.adminStatLabel}>Atrasados</Text>
+                  </View>
+                  <View style={styles.adminStatItem}>
+                    <Text style={[styles.adminStatNumber, { color: '#FF9800' }]}>
+                      {matos.filter(v => {
+                        const dias = Math.ceil((new Date(v.dataNecessidade) - new Date()) / (1000 * 60 * 60 * 24));
+                        return dias <= 3 && dias >= 0 && v.status !== 'concluido';
+                      }).length}
+                    </Text>
+                    <Text style={styles.adminStatLabel}>Urgentes</Text>
+                  </View>
+                </View>
+              </View>
             </View>
           )}
           
@@ -1439,6 +1598,293 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
+  // ===== ESTILOS PRINCIPAIS MODERNOS =====
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+  },
+  // ===== ESTILOS DOS MENUS SOFISTICADOS =====
+  
+  // Menu Principal
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  
+  // Header Moderno do Usuário
+  modernUserHeader: {
+    paddingTop: 50,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+  },
+  modernHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modernUserInfo: {
+    flex: 1,
+  },
+  modernWelcomeText: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 4,
+  },
+  modernUserName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  modernLastSync: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  modernUserAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginLeft: 15,
+  },
+  modernAvatarText: {
+    fontSize: 20,
+    color: '#ffffff',
+  },
+  modernSyncButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginLeft: 10,
+  },
+  syncIcon: {
+    fontSize: 16,
+    marginRight: 5,
+    color: '#ffffff',
+  },
+  syncText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  
+  // Dashboard de Estatísticas
+  dashboardContainer: {
+    backgroundColor: '#ffffff',
+    margin: 15,
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  dashboardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: 15,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  statIconText: {
+    fontSize: 16,
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  
+  // Barra de Progresso
+  progressContainer: {
+    marginTop: 10,
+  },
+  progressLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginTop: 5,
+    fontWeight: 'bold',
+  },
+  
+  // Menu de Administrador
+  adminMenuContainer: {
+    backgroundColor: '#ffffff',
+    margin: 15,
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  adminMenuHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  adminBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  adminBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  adminMenuTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  adminMenuSubtitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  
+  // Grid de Ações do Admin
+  adminActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  adminActionCard: {
+    width: '48%',
+    marginBottom: 12,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  adminActionGradient: {
+    padding: 15,
+    alignItems: 'center',
+    minHeight: 100,
+    justifyContent: 'center',
+  },
+  adminActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  adminActionIconText: {
+    fontSize: 20,
+  },
+  adminActionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  adminActionSubtitle: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+  },
+  
+  // Estatísticas Avançadas do Admin
+  adminStatsContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 15,
+    marginTop: 10,
+  },
+  adminStatsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  adminStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  adminStatItem: {
+    alignItems: 'center',
+  },
+  adminStatNumber: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+    marginBottom: 4,
+  },
+  adminStatLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+
   // ===== ESTILOS PARA INDICADORES DE PRAZO =====
   
   // Estilos dos itens de vão baseados no prazo
