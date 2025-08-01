@@ -27,19 +27,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "a235cc25-bdb0-4ed7-9db8-7a2d55723427"
-      }
-    },
-    "runtimeVersion": {
-      "policy": "sdkVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/corte-poda-project",
-      "fallbackToCacheTimeout": 0,
-      "enabled": true
     }
   }
 }

@@ -12,26 +12,19 @@ import {
   Platform,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Image,
-  LogBox
+  Image
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
-import { Button, ListItem, Header, Badge } from 'react-native-elements';
-import Icon from 'react-native-vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import XLSX from 'xlsx';
-
-import LoginScreen from './components/LoginScreen';
-import SyncStatus from './components/SyncStatus';
-import ErrorBoundary from './components/ErrorBoundary';
-import { StorageService, SyncService } from './services/StorageService';
+import { LinearGradient } from 'expo-linear-gradient';
 
 // Ignorar avisos específicos para SDK 29
-LogBox.ignoreLogs(['Require cycle:', 'AsyncStorage has been extracted']);
+// Configuração silenciosa - removido LogBox por compatibilidade com Hermes
+// LogBox.ignoreLogs(['Require cycle:', 'AsyncStorage has been extracted']);
 
 // Usuários pré-definidos
 const USUARIOS = {
@@ -82,6 +75,38 @@ export default function App() {
     setCompletedItems(completed);
     setTotalItems(matos.length);
   }, [matos]);
+
+  // Verificar conectividade
+  useEffect(() => {
+    // Carregar última data de sincronização
+    AsyncStorage.getItem('ultimaSincronizacao').then(data => {
+      if (data) setUltimaSincronizacao(data);
+    });
+    
+    // Em um app real, usaria NetInfo para monitorar conectividade
+    setConectado(true);
+  }, []);
+
+  // Verificar se todos os componentes estão inicializados
+  useEffect(() => {
+    try {
+      // Verificar se todos os módulos necessários estão disponíveis
+      if (Platform && 
+          AsyncStorage && 
+          DocumentPicker && 
+          FileSystem && 
+          Print && 
+          Sharing) {
+        setIsInitialized(true);
+      }
+    } catch (error) {
+      console.error("Erro na inicialização:", error);
+      Alert.alert(
+        "Erro na Inicialização",
+        "Houve um problema ao inicializar o aplicativo. Por favor, reinicie o aplicativo."
+      );
+    }
+  }, []);
 
   // Verificar login existente
   const verificarLogin = async () => {
@@ -171,9 +196,9 @@ export default function App() {
     setImportando(true);
     
     try {
-      // Selecionar o arquivo
+      // Selecionar arquivo CSV
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        type: ['text/csv', 'text/comma-separated-values', 'application/csv', 'text/plain'],
         copyToCacheDirectory: true
       });
       
@@ -182,20 +207,42 @@ export default function App() {
         return;
       }
       
-      // Ler o arquivo
+      // Ler o arquivo como texto
       const fileUri = result.assets[0].uri;
       const fileContent = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.Base64
+        encoding: FileSystem.EncodingType.UTF8
       });
       
-      // Processar a planilha
-      const workbook = XLSX.read(fileContent, { type: 'base64' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      // Processar CSV
+      const lines = fileContent.split(/\r?\n/).filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        Alert.alert('Arquivo Inválido', 'O arquivo deve conter pelo menos uma linha de cabeçalho e uma linha de dados.');
+        setImportando(false);
+        return;
+      }
+      
+      // Detectar separador (vírgula ou ponto e vírgula)
+      const header = lines[0];
+      const separator = header.includes(';') ? ';' : ',';
+      
+      // Processar dados
+      const jsonData = [];
+      for (let i = 1; i < lines.length; i++) {
+        const valores = lines[i].split(separator).map(v => v.trim().replace(/['"]/g, ''));
+        
+        if (valores.length >= 3) {
+          jsonData.push({
+            Descricao: valores[0] || `Vão ${i}`,
+            Localizacao: valores[1] || 'Não informado',
+            Area: valores[2] || '0m²',
+            DataNecessidade: valores[3] || new Date().toISOString().split('T')[0]
+          });
+        }
+      }
       
       if (jsonData.length === 0) {
-        Alert.alert('Planilha Vazia', 'A planilha não contém dados.');
+        Alert.alert('Nenhum Dado Válido', 'Não foi possível processar nenhum item do arquivo.');
         setImportando(false);
         return;
       }
@@ -356,27 +403,6 @@ export default function App() {
     }
   };
 
-  // Verificar conectividade
-  useEffect(() => {
-    // Carregar última data de sincronização
-    AsyncStorage.getItem('ultimaSincronizacao').then(data => {
-      if (data) setUltimaSincronizacao(data);
-    });
-    
-    // Em um app real, usaria NetInfo para monitorar conectividade
-    // Simulando com uma função simples aqui
-    const verificarConexao = () => {
-      // Simular uma conexão aleatória para demonstração
-      const temConexao = Math.random() > 0.2; // 80% de chance de estar conectado
-      setConectado(temConexao);
-    };
-    
-    verificarConexao();
-    const intervalo = setInterval(verificarConexao, 30000);
-    
-    return () => clearInterval(intervalo);
-  }, []);
-
   const adicionarVaoExemplo = () => {
     const exemplo = {
       id: Date.now(),
@@ -534,30 +560,9 @@ export default function App() {
   
   // Usuário logado - mostrar interface principal
   const stats = contarStatus();
-  // Verificar se todos os componentes estão inicializados
-  useEffect(() => {
-    try {
-      // Verificar se todos os módulos necessários estão disponíveis
-      if (Platform && 
-          AsyncStorage && 
-          DocumentPicker && 
-          FileSystem && 
-          Print && 
-          Sharing && 
-          XLSX) {
-        setIsInitialized(true);
-      }
-    } catch (error) {
-      console.error("Erro na inicialização:", error);
-      Alert.alert(
-        "Erro na Inicialização",
-        "Houve um problema ao inicializar o aplicativo. Por favor, reinicie o aplicativo."
-      );
-    }
-  }, []);
   
   return (
-    <ErrorBoundary>
+    <>
       {isInitialized ? (
         <SafeAreaView style={styles.container}>
           <StatusBar style="light" backgroundColor="#2E7D32" />
@@ -652,57 +657,140 @@ export default function App() {
           
           {/* Lista de Vãos */}
           <ScrollView style={styles.lista}>
-            {matos.map((vao) => (
-              <View key={vao.id} style={[styles.vaoCard, { borderLeftColor: getCorStatus(vao.status) }]}>
-                <View style={styles.vaoHeader}>
-                  <Text style={styles.vaoIcon}>{getStatusIcon(vao)}</Text>
-                  <Text style={styles.vaoDescricao}>{vao.descricao}</Text>
-                </View>
+            {matos.map((vao) => {
+              // Calcular status do prazo
+              const hoje = new Date();
+              const dataNecessidade = new Date(vao.dataNecessidade);
+              const diasRestantes = Math.ceil((dataNecessidade - hoje) / (1000 * 60 * 60 * 24));
+              
+              // Determinar classe de prazo e indicador
+              let classPrazo = 'normal';
+              let indicadorPrazo = '';
+              let corPrazo = '#4CAF50';
+              
+              if (vao.status !== 'concluido') {
+                if (diasRestantes < 0) {
+                  classPrazo = 'atrasado';
+                  indicadorPrazo = '⚠️';
+                  corPrazo = '#F44336';
+                } else if (diasRestantes <= 3) {
+                  classPrazo = 'urgente';
+                  indicadorPrazo = '🕐';
+                  corPrazo = '#FF9800';
+                } else if (diasRestantes <= 7) {
+                  classPrazo = 'proximoVencimento';
+                  indicadorPrazo = '⏰';
+                  corPrazo = '#FFC107';
+                }
+              }
+
+              // Determinar estilo do card baseado no status e prazo
+              const getCardStyle = () => {
+                const baseStyle = [styles.vaoCard];
                 
-                <Text style={styles.vaoInfo}>📍 {vao.localizacao}</Text>
-                <Text style={styles.vaoInfo}>📏 Área: {vao.area}</Text>
-                <Text style={styles.vaoInfo}>📅 Prazo: {vao.dataNecessidade}</Text>
+                // Estilo baseado no status
+                if (vao.status === 'pendente') {
+                  baseStyle.push(styles.vaoItemPendente);
+                } else if (vao.status === 'iniciado') {
+                  baseStyle.push(styles.vaoItemIniciado);
+                } else if (vao.status === 'concluido') {
+                  baseStyle.push(styles.vaoItemConcluido);
+                }
                 
-                <View style={styles.statusContainer}>
-                  <Text style={[styles.status, { color: getCorStatus(vao.status) }]}>
-                    ● {vao.status.toUpperCase()}
-                  </Text>
-                  
-                  {vao.atualizadoPor && vao.status !== 'pendente' && (
-                    <Text style={styles.updatedByText}>
-                      Atualizado por: {vao.atualizadoPor}
-                    </Text>
-                  )}
-                </View>
+                // Estilo baseado no prazo (apenas se não estiver concluído)
+                if (vao.status !== 'concluido') {
+                  if (classPrazo === 'atrasado') {
+                    baseStyle.push(styles.vaoItemAtrasado);
+                  } else if (classPrazo === 'urgente') {
+                    baseStyle.push(styles.vaoItemUrgente);
+                  } else if (classPrazo === 'proximoVencimento') {
+                    baseStyle.push(styles.vaoItemProximoVencimento);
+                  }
+                }
                 
-                {/* Botões de Ação */}
-                <View style={styles.actionButtons}>
-                  {vao.status === 'pendente' && (
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, {backgroundColor: '#FF9800'}]}
-                      onPress={() => alterarStatus(vao.id, 'iniciado')}
-                    >
-                      <Text style={styles.actionBtnText}>▶️ Iniciar</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  {vao.status === 'iniciado' && (
-                    <TouchableOpacity 
-                      style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}
-                      onPress={() => alterarStatus(vao.id, 'concluido')}
-                    >
-                      <Text style={styles.actionBtnText}>✅ Concluir</Text>
-                    </TouchableOpacity>
-                  )}
-                  
-                  {vao.status === 'concluido' && (
-                    <View style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}>
-                      <Text style={styles.actionBtnText}>✅ Finalizado</Text>
+                return baseStyle;
+              };
+
+              return (
+                <View key={vao.id} style={getCardStyle()}>
+                  <View style={styles.vaoHeader}>
+                    <View style={styles.vaoTitleContainer}>
+                      <Text style={styles.vaoIcon}>{getStatusIcon(vao)}</Text>
+                      <Text style={styles.vaoDescricao}>
+                        {indicadorPrazo} {vao.descricao}
+                      </Text>
+                      {vao.status !== 'concluido' && classPrazo !== 'normal' && (
+                        <View style={[styles.prazoIndicator, { backgroundColor: corPrazo }]}>
+                          <Text style={styles.prazoIndicatorText}>
+                            {diasRestantes < 0 ? `${Math.abs(diasRestantes)}d atraso` : 
+                             diasRestantes === 0 ? 'Hoje!' : 
+                             `${diasRestantes}d restantes`}
+                          </Text>
+                        </View>
+                      )}
                     </View>
-                  )}
+                  </View>
+                  
+                  <View style={styles.vaoInfoContainer}>
+                    <Text style={styles.vaoInfo}>📍 {vao.localizacao}</Text>
+                    <Text style={styles.vaoInfo}>📏 Área: {vao.area}</Text>
+                    <Text style={[styles.vaoInfo, styles.vaoDataNecessidade]}>
+                      📅 Prazo: {new Date(vao.dataNecessidade).toLocaleDateString('pt-BR')}
+                      {vao.status !== 'concluido' && classPrazo !== 'normal' && (
+                        <Text style={[styles.prazoTexto, 
+                          classPrazo === 'atrasado' && styles.prazoAtrasado,
+                          classPrazo === 'urgente' && styles.prazoUrgente,
+                          classPrazo === 'proximoVencimento' && styles.prazoProximo
+                        ]}>
+                          {classPrazo === 'atrasado' ? ' (ATRASADO)' :
+                           classPrazo === 'urgente' ? ' (URGENTE)' :
+                           classPrazo === 'proximoVencimento' ? ' (PRÓXIMO)' : ''}
+                        </Text>
+                      )}
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.statusContainer}>
+                    <Text style={[styles.status, { color: getCorStatus(vao.status) }]}>
+                      ● {vao.status.toUpperCase()}
+                    </Text>
+                    
+                    {vao.atualizadoPor && vao.status !== 'pendente' && (
+                      <Text style={styles.updatedByText}>
+                        Atualizado por: {vao.atualizadoPor}
+                      </Text>
+                    )}
+                  </View>
+                  
+                  {/* Botões de Ação */}
+                  <View style={styles.actionButtons}>
+                    {vao.status === 'pendente' && (
+                      <TouchableOpacity 
+                        style={[styles.actionBtn, {backgroundColor: '#FF9800'}]}
+                        onPress={() => alterarStatus(vao.id, 'iniciado')}
+                      >
+                        <Text style={styles.actionBtnText}>▶️ Iniciar</Text>
+                      </TouchableOpacity>
+                    )}
+                    
+                    {vao.status === 'iniciado' && (
+                      <TouchableOpacity 
+                        style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}
+                        onPress={() => alterarStatus(vao.id, 'concluido')}
+                      >
+                        <Text style={styles.actionBtnText}>✅ Concluir</Text>
+                      </TouchableOpacity>
+                    )}
+                    
+                    {vao.status === 'concluido' && (
+                      <View style={[styles.actionBtn, {backgroundColor: '#4CAF50'}]}>
+                        <Text style={styles.actionBtnText}>✅ Finalizado</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
             
             {matos.length === 0 && (
               <View style={styles.emptyContainer}>
@@ -786,7 +874,7 @@ export default function App() {
           <Text style={styles.loadingText}>Inicializando aplicativo...</Text>
         </View>
       )}
-    </ErrorBoundary>
+    </>
   );
 }
 
@@ -1121,5 +1209,89 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#666',
+  },
+  // ===== ESTILOS PARA INDICADORES DE PRAZO =====
+  
+  // Estilos dos itens de vão baseados no prazo
+  vaoItemAtrasado: {
+    borderLeftColor: '#F44336',
+    borderLeftWidth: 5,
+    backgroundColor: '#FFEBEE',
+  },
+  vaoItemUrgente: {
+    borderLeftColor: '#FF9800',
+    borderLeftWidth: 5,
+    backgroundColor: '#FFF3E0',
+  },
+  vaoItemProximoVencimento: {
+    borderLeftColor: '#FFC107',
+    borderLeftWidth: 5,
+    backgroundColor: '#FFFDE7',
+  },
+  vaoItemPendente: {
+    borderLeftColor: '#9E9E9E',
+    borderLeftWidth: 4,
+  },
+  vaoItemIniciado: {
+    borderLeftColor: '#FF9800',
+    borderLeftWidth: 4,
+  },
+  vaoItemConcluido: {
+    borderLeftColor: '#4CAF50',
+    borderLeftWidth: 4,
+  },
+
+  // Container do título do vão
+  vaoTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  // Indicador de prazo (badge)
+  prazoIndicator: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  prazoIndicatorText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+
+  // Container das informações do vão
+  vaoInfoContainer: {
+    marginBottom: 10,
+  },
+
+  // Estilo especial para data de necessidade
+  vaoDataNecessidade: {
+    fontWeight: '500',
+  },
+
+  // Textos de prazo com cores específicas
+  prazoTexto: {
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  prazoAtrasado: {
+    color: '#F44336',
+  },
+  prazoUrgente: {
+    color: '#FF9800',
+  },
+  prazoProximo: {
+    color: '#FFC107',
+  },
+
+  // Estilos para cards de diagnóstico
+  diagnosticCard: {
+    borderLeftColor: '#9C27B0',
+  },
+  dateTestCard: {
+    borderLeftColor: '#00BCD4',
   },
 });

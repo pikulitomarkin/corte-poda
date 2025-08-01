@@ -1,59 +1,49 @@
-module.exports = {
-  name: "Corte de Matos",
-  slug: "corte-poda",
-  version: "1.0.0",
-  orientation: "portrait",
-  icon: "./assets/icon.png",
-  userInterfaceStyle: "light",
-  splash: {
-    image: "./assets/splash.png",
-    resizeMode: "contain",
-    backgroundColor: "#ffffff"
-  },
-  assetBundlePatterns: [
-    "**/*"
-  ],
-  ios: {
-    supportsTablet: true,
-    bundleIdentifier: "com.managematos.cortepoda"
-  },
-  android: {
-    adaptiveIcon: {
-      foregroundImage: "./assets/adaptive-icon.png",
-      backgroundColor: "#ffffff"
+export default {
+  expo: {
+    name: "Corte de Matos",
+    slug: "corte-poda",
+    version: "1.0.0",
+    orientation: "portrait",
+    userInterfaceStyle: "light",
+    platforms: ["ios", "android"],
+    jsEngine: "hermes",
+    assetBundlePatterns: [
+      "**/*"
+    ],
+    ios: {
+      supportsTablet: true,
+      jsEngine: "hermes"
     },
-    package: "com.managematos.cortepoda",
-    versionCode: 1,
-    buildToolsVersion: "33.0.0",
-    compileSdkVersion: 33,
-    targetSdkVersion: 33,
-    config: {
-      googleMaps: {
-        apiKey: process.env.GOOGLE_MAPS_API_KEY || ""
-      }
-    }
-  },
-  web: {
-    favicon: "./assets/favicon.png"
-  },
-  extra: {
-    eas: {
-      projectId: "a235cc25-bdb0-4ed7-9db8-7a2d55723427"
-    }
-  },
-  plugins: [
-    [
-      "expo-build-properties",
-      {
-        android: {
-          enableProguardInReleaseBuilds: true,
-          enableDexGuardInReleaseBuilds: false,
-          extraProguardRules: "-keep class com.managematos.cortepoda.** { *; }"
+    android: {
+      adaptiveIcon: {
+        backgroundColor: "#ffffff"
+      },
+      jsEngine: "hermes",
+      permissions: [
+        "CAMERA",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    plugins: [
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/notification-icon.png",
+          color: "#ffffff",
+          sounds: [
+            "notification.wav"
+          ]
         }
-      }
+      ],
+      [
+        "expo-location",
+        {
+          locationAlwaysAndWhenInUsePermission: "Este app precisa de acesso à localização para marcar o local dos trabalhos."
+        }
+      ]
     ]
-  ],
-  updates: {
-    fallbackToCacheTimeout: 0
   }
 };

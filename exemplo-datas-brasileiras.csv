@@ -1,0 +1,9 @@
+Descricao,Localizacao,Area,DataNecessidade,Observacoes
+Teste Data DD/MM/AAAA,Local 1,100m²,15/12/2024,Data padrão brasileira
+Teste Data DD/MM/AA,Local 2,150m²,20/12/24,Data com ano abreviado
+Teste Data DD-MM-AAAA,Local 3,200m²,25-12-2024,Data com hífen
+Teste Data DD.MM.AAAA,Local 4,120m²,30.12.2024,Data com ponto
+Teste Data com Mês,Local 5,180m²,5 de janeiro de 2025,Data por extenso
+Teste Data Abrev,Local 6,90m²,10 jan 2025,Data com mês abreviado
+Teste Data ISO,Local 7,300m²,2025-02-15,Data já no formato ISO
+Teste Data Inválida,Local 8,250m²,data_inválida,Para testar fallback
