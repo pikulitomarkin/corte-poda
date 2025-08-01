@@ -1,0 +1,6 @@
+Descricao;Localizacao;Area;DataNecessidade;Observacoes
+Teste Separador PV;Local A;100m²;01/01/2025;Ponto e vírgula
+Teste Urgente;Local B;150m²;31/12/2024;Fim do ano
+Teste Área Grande;Local C;500m²;15/01/2025;Área muito extensa
+Teste Observação Longa;Local D;75m²;20/01/2025;Esta é uma observação muito longa para testar como o sistema trata textos maiores com caracteres especiais como acentos, vírgulas e pontos.
+Teste Campos Vazios;Local E;;25/01/2025;Área vazia para teste
