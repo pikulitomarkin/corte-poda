@@ -53,6 +53,8 @@ export default function App() {
   const [sincronizando, setSincronizando] = useState(false);
   const [conectado, setConectado] = useState(true);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null);
+  const [sincronizacaoAutomaticaAtiva, setSincronizacaoAutomaticaAtiva] = useState(false);
+  const [mostrarNotificacaoSync, setMostrarNotificacaoSync] = useState(false);
   
   // Estado para adicionar novo vão
   const [modalVisible, setModalVisible] = useState(false);
@@ -107,6 +109,56 @@ export default function App() {
       );
     }
   }, []);
+
+  // Inicializar sincronização automática em tempo real
+  useEffect(() => {
+    if (!logado || !conectado) {
+      setSincronizacaoAutomaticaAtiva(false);
+      return;
+    }
+
+    setSincronizacaoAutomaticaAtiva(true);
+
+    const intervalo = setInterval(async () => {
+      if (conectado && logado) {
+        try {
+          // Mostra notificação de sincronização
+          setMostrarNotificacaoSync(true);
+          
+          // Simulando verificação de mudanças no servidor
+          const dadosServidor = await verificarMudancasServidor();
+          if (dadosServidor && dadosServidor.length !== matos.length) {
+            // Se houver mudanças, atualiza os dados locais
+            setMatos(dadosServidor);
+            await salvarDados(dadosServidor);
+            
+            const agora = new Date().toLocaleString('pt-BR');
+            setUltimaSincronizacao(agora);
+            await AsyncStorage.setItem('ultimaSincronizacao', agora);
+          } else {
+            // Atualiza apenas o timestamp de sincronização
+            const agora = new Date().toLocaleString('pt-BR');
+            setUltimaSincronizacao(agora);
+            await AsyncStorage.setItem('ultimaSincronizacao', agora);
+          }
+          
+          // Esconde notificação após 2 segundos
+          setTimeout(() => {
+            setMostrarNotificacaoSync(false);
+          }, 2000);
+          
+        } catch (erro) {
+          console.log('Erro na sincronização automática:', erro);
+          setMostrarNotificacaoSync(false);
+        }
+      }
+    }, 30000); // 30 segundos
+
+    return () => {
+      clearInterval(intervalo);
+      setSincronizacaoAutomaticaAtiva(false);
+    };
+  }, [logado, conectado, matos]);
 
   // Verificar login existente
   const verificarLogin = async () => {
@@ -253,7 +305,7 @@ export default function App() {
         descricao: linha.Descricao || 'Sem descrição',
         localizacao: linha.Localizacao || 'Local não especificado',
         area: linha.Area || '0m²',
-        dataNecessidade: linha.DataNecessidade || new Date().toISOString().split('T')[0],
+        dataNecessidade: processarDataBrasileira(linha.DataNecessidade || ''),
         status: 'pendente',
         dataInicio: null,
         dataConclusao: null,
@@ -344,7 +396,7 @@ export default function App() {
                 <td>${vao.descricao}</td>
                 <td>${vao.localizacao}</td>
                 <td>${vao.area}</td>
-                <td>${new Date(vao.dataNecessidade).toLocaleDateString('pt-BR')}</td>
+                <td>${formatarDataParaExibicao(vao.dataNecessidade)}</td>
                 <td class="${vao.status}">${vao.status.toUpperCase()}</td>
                 <td>${vao.dataInicio || '-'}</td>
                 <td>${vao.dataConclusao || '-'}</td>
@@ -378,7 +430,44 @@ export default function App() {
     }
   };
 
-  // Função para sincronizar dados
+  // Função para sincronização em tempo real
+  const iniciarSincronizacaoTempoReal = () => {
+    // Simula sincronização automática a cada 30 segundos
+    const intervalo = setInterval(async () => {
+      if (conectado && logado) {
+        try {
+          // Simulando verificação de mudanças no servidor
+          const dadosServidor = await verificarMudancasServidor();
+          if (dadosServidor && dadosServidor.length !== matos.length) {
+            // Se houver mudanças, atualiza os dados locais
+            setMatos(dadosServidor);
+            await salvarDados(dadosServidor);
+            
+            const agora = new Date().toLocaleString('pt-BR');
+            setUltimaSincronizacao(agora);
+            await AsyncStorage.setItem('ultimaSincronizacao', agora);
+          }
+        } catch (erro) {
+          console.log('Erro na sincronização automática:', erro);
+        }
+      }
+    }, 30000); // 30 segundos
+
+    return intervalo;
+  };
+
+  // Simula verificação de mudanças no servidor
+  const verificarMudancasServidor = async () => {
+    // Em uma aplicação real, aqui seria uma chamada HTTP para sua API
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // Retorna os dados atuais para simular que não há mudanças
+        resolve(matos);
+      }, 500);
+    });
+  };
+
+  // Função para sincronizar dados manualmente
   const sincronizarDados = async () => {
     if (!conectado) {
       Alert.alert('Sem conexão', 'Você precisa estar conectado à internet para sincronizar.');
@@ -388,13 +477,19 @@ export default function App() {
     setSincronizando(true);
     
     try {
-      // Simulando uma chamada de API para sincronização
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Simulando envio dos dados para o servidor
+      await enviarDadosParaServidor(matos);
       
-      // Em uma aplicação real, aqui você faria uma chamada para sua API
-      // para enviar os dados atualizados e receber os dados do servidor
+      // Simulando recebimento de dados atualizados do servidor
+      const dadosAtualizados = await verificarMudancasServidor();
       
-      const agora = new Date().toLocaleString();
+      // Atualiza os dados locais com os dados do servidor
+      if (dadosAtualizados) {
+        setMatos(dadosAtualizados);
+        await salvarDados(dadosAtualizados);
+      }
+      
+      const agora = new Date().toLocaleString('pt-BR');
       setUltimaSincronizacao(agora);
       await AsyncStorage.setItem('ultimaSincronizacao', agora);
       
@@ -405,6 +500,60 @@ export default function App() {
     } finally {
       setSincronizando(false);
     }
+  };
+
+  // Simula envio de dados para o servidor
+  const enviarDadosParaServidor = async (dados) => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        console.log('Dados enviados para o servidor:', dados.length, 'vãos');
+        resolve(true);
+      }, 1000);
+    });
+  };
+
+  // Função para limpar todos os dados importados (apenas admin)
+  const limparDadosImportados = () => {
+    if (!isAdmin()) {
+      Alert.alert('Acesso Negado', 'Apenas administradores podem limpar os dados.');
+      return;
+    }
+
+    Alert.alert(
+      '⚠️ Confirmação',
+      'Esta ação irá remover TODOS os vãos importados e não pode ser desfeita.\n\nDeseja continuar?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Sim, Limpar Tudo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Limpa os dados locais
+              setMatos([]);
+              await AsyncStorage.removeItem('matos');
+              
+              // Atualiza a última sincronização
+              const agora = new Date().toLocaleString('pt-BR');
+              setUltimaSincronizacao(agora);
+              await AsyncStorage.setItem('ultimaSincronizacao', agora);
+              
+              Alert.alert(
+                '✅ Sucesso',
+                'Todos os dados foram removidos com sucesso!',
+                [{ text: 'OK' }]
+              );
+            } catch (erro) {
+              console.log('Erro ao limpar dados:', erro);
+              Alert.alert('Erro', 'Não foi possível limpar os dados. Tente novamente.');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const adicionarVaoExemplo = () => {
@@ -433,6 +582,7 @@ export default function App() {
     const vao = {
       id: Date.now(),
       ...novoVao,
+      dataNecessidade: processarDataBrasileira(novoVao.dataNecessidade), // Processa a data antes de salvar
       status: 'pendente',
       dataInicio: null,
       dataConclusao: null,
@@ -542,6 +692,35 @@ export default function App() {
     return new Date().toISOString().split('T')[0];
   };
   
+  // Função para formatar data para exibição (formato brasileiro)
+  const formatarDataParaExibicao = (dataString) => {
+    if (!dataString) return 'Data não informada';
+    
+    try {
+      // Se a data está no formato ISO (YYYY-MM-DD)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dataString)) {
+        const [ano, mes, dia] = dataString.split('-');
+        return `${dia}/${mes}/${ano}`;
+      }
+      
+      // Se a data já está no formato brasileiro
+      if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(dataString)) {
+        return dataString;
+      }
+      
+      // Tenta converter usando Date() se for outro formato
+      const data = new Date(dataString);
+      if (!isNaN(data.getTime())) {
+        return data.toLocaleDateString('pt-BR');
+      }
+      
+      return 'Data inválida';
+    } catch (error) {
+      console.log('Erro ao formatar data:', dataString, error);
+      return 'Data inválida';
+    }
+  };
+
   // Verificar se é admin
   const isAdmin = () => {
     return usuario && usuario.tipo === 'admin';
@@ -752,10 +931,21 @@ export default function App() {
                 <Text style={styles.statusText}>
                   {conectado ? 'Online' : 'Offline'}
                 </Text>
+                {sincronizacaoAutomaticaAtiva && (
+                  <View style={styles.realTimeBadge}>
+                    <Text style={styles.realTimeBadgeText}>Auto Sync</Text>
+                  </View>
+                )}
                 {ultimaSincronizacao && (
                   <Text style={styles.lastSyncText}>
                     • Sync: {ultimaSincronizacao.split(' ')[1]}
                   </Text>
+                )}
+                {sincronizacaoAutomaticaAtiva && (
+                  <View style={styles.lastAutoSyncContainer}>
+                    <Text style={styles.lastAutoSyncIcon}>🔄</Text>
+                    <Text style={styles.lastAutoSyncText}>Sincronização ativa</Text>
+                  </View>
                 )}
               </View>
               
@@ -764,6 +954,7 @@ export default function App() {
                 onPress={sincronizarDados}
                 disabled={sincronizando}
               >
+                {sincronizacaoAutomaticaAtiva && <View style={styles.autoSyncIndicator} />}
                 {sincronizando ? (
                   <ActivityIndicator size="small" color="white" />
                 ) : (
@@ -779,6 +970,16 @@ export default function App() {
           {/* Dashboard de Estatísticas */}
           <View style={styles.dashboardContainer}>
             <Text style={styles.dashboardTitle}>📊 Painel de Controle</Text>
+            
+            {/* Indicador de Sincronização Automática */}
+            {sincronizacaoAutomaticaAtiva && (
+              <View style={styles.syncStatusIndicator}>
+                <View style={styles.syncStatusDot} />
+                <Text style={styles.syncStatusText}>
+                  Sincronização automática ativa • A cada 30s
+                </Text>
+              </View>
+            )}
             
             <View style={styles.statsGrid}>
               <LinearGradient
@@ -907,18 +1108,18 @@ export default function App() {
                 
                 <TouchableOpacity 
                   style={styles.adminActionCard} 
-                  onPress={() => Alert.alert('Em Breve', 'Funcionalidade em desenvolvimento')}
+                  onPress={limparDadosImportados}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
-                    colors={['#FF5722', '#FF7043']}
+                    colors={['#F44336', '#EF5350']}
                     style={styles.adminActionGradient}
                   >
                     <View style={styles.adminActionIcon}>
-                      <Text style={styles.adminActionIconText}>⚙️</Text>
+                      <Text style={styles.adminActionIconText}>🗑️</Text>
                     </View>
-                    <Text style={styles.adminActionTitle}>Configurações</Text>
-                    <Text style={styles.adminActionSubtitle}>Sistema</Text>
+                    <Text style={styles.adminActionTitle}>Limpar Dados</Text>
+                    <Text style={styles.adminActionSubtitle}>Importados</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               </View>
@@ -1039,7 +1240,7 @@ export default function App() {
                     <Text style={styles.vaoInfo}>📍 {vao.localizacao}</Text>
                     <Text style={styles.vaoInfo}>📏 Área: {vao.area}</Text>
                     <Text style={[styles.vaoInfo, styles.vaoDataNecessidade]}>
-                      📅 Prazo: {new Date(vao.dataNecessidade).toLocaleDateString('pt-BR')}
+                      📅 Prazo: {formatarDataParaExibicao(vao.dataNecessidade)}
                       {vao.status !== 'concluido' && classPrazo !== 'normal' && (
                         <Text style={[styles.prazoTexto, 
                           classPrazo === 'atrasado' && styles.prazoAtrasado,
@@ -1162,7 +1363,7 @@ export default function App() {
                 
                 <TextInput
                   style={styles.input}
-                  placeholder="Data necessidade (AAAA-MM-DD)"
+                  placeholder="Data necessidade (DD/MM/AAAA ou AAAA-MM-DD)"
                   value={novoVao.dataNecessidade}
                   onChangeText={(text) => setNovoVao({...novoVao, dataNecessidade: text})}
                 />
@@ -1195,6 +1396,15 @@ export default function App() {
           </View>
           
           </ScrollView>
+          
+          {/* Notificação de Sincronização */}
+          {mostrarNotificacaoSync && (
+            <View style={styles.syncNotification}>
+              <Text style={styles.syncNotificationIcon}>🔄</Text>
+              <Text style={styles.syncNotificationText}>Sincronizando...</Text>
+            </View>
+          )}
+          
         </SafeAreaView>
       ) : (
         <View style={styles.loadingContainer}>
@@ -2149,5 +2359,154 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(255,255,255,0.7)',
     marginLeft: 4,
+  },
+  
+  // ===== ESTILOS PARA SINCRONIZAÇÃO AUTOMÁTICA =====
+  
+  // Indicador de sincronização automática ativa
+  autoSyncIndicator: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#4CAF50',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  
+  // Animação pulsante para sincronização ativa
+  syncPulse: {
+    backgroundColor: '#4CAF50',
+    opacity: 0.7,
+  },
+  
+  // Status de sincronização no dashboard
+  syncStatusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 5,
+  },
+  
+  syncStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+    marginRight: 5,
+  },
+  
+  syncStatusText: {
+    fontSize: 10,
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  
+  // Badge de sincronização em tempo real
+  realTimeBadge: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  
+  realTimeBadgeText: {
+    fontSize: 8,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  
+  // Indicador de última sincronização automática
+  lastAutoSyncContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  
+  lastAutoSyncIcon: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.6)',
+    marginRight: 3,
+  },
+  
+  lastAutoSyncText: {
+    fontSize: 8,
+    color: 'rgba(255,255,255,0.6)',
+    fontStyle: 'italic',
+  },
+  
+  // Notification de sincronização
+  syncNotification: {
+    position: 'absolute',
+    top: 100,
+    right: 15,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1000,
+  },
+  
+  syncNotificationIcon: {
+    fontSize: 12,
+    color: '#ffffff',
+    marginRight: 5,
+  },
+  
+  syncNotificationText: {
+    fontSize: 11,
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  
+  // Overlay de sincronização
+  syncOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(76, 175, 80, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  
+  syncOverlayContent: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderRadius: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  
+  syncOverlayIcon: {
+    marginRight: 10,
+  },
+  
+  syncOverlayText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: '600',
   },
 });
