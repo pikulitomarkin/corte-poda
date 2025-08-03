@@ -376,7 +376,7 @@ Este projeto está licenciado sob a licença MIT - veja o arquivo [LICENSE](LICE
 
 ## 🏆 **Créditos**
 
-Desenvolvido com ❤️ por **Sistema de Corte de Matos Team**
+Desenvolvido com ❤️ por **Marcos Padilha Piloto e Claude Sonnet 4 Copiloto**
 
 ### 🛠 **Tecnologias e Agradecimentos**
 - React Native Team
