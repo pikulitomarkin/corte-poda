@@ -7,18 +7,45 @@ export default {
     userInterfaceStyle: "light",
     platforms: ["ios", "android"],
     jsEngine: "hermes",
+    icon: "./assets/icon.png",
+    splash: {
+      image: "./assets/splash.png",
+      resizeMode: "cover",
+      backgroundColor: "#228B22"
+    },
+    extra: {
+      eas: {
+        projectId: "a235cc25-bdb0-4ed7-9db8-7a2d55723427"
+      }
+    },
+    updates: {
+      url: "https://u.expo.dev/a235cc25-bdb0-4ed7-9db8-7a2d55723427"
+    },
     assetBundlePatterns: [
       "**/*"
     ],
     ios: {
       supportsTablet: true,
-      jsEngine: "hermes"
+      jsEngine: "hermes",
+      runtimeVersion: {
+        policy: "appVersion"
+      }
     },
     android: {
+      icon: "./assets/icon.png",
       adaptiveIcon: {
-        backgroundColor: "#ffffff"
+        foregroundImage: "./assets/icon.png",
+        backgroundColor: "#2D5016",
+        monochromeImage: "./assets/icon.png"
+      },
+      splash: {
+        image: "./assets/splash.png",
+        resizeMode: "cover",
+        backgroundColor: "#228B22"
       },
       jsEngine: "hermes",
+      runtimeVersion: "1.0.0",
+      package: "com.pikulito.cortepoda",
       permissions: [
         "CAMERA",
         "WRITE_EXTERNAL_STORAGE",
@@ -28,16 +55,6 @@ export default {
       ]
     },
     plugins: [
-      [
-        "expo-notifications",
-        {
-          icon: "./assets/notification-icon.png",
-          color: "#ffffff",
-          sounds: [
-            "notification.wav"
-          ]
-        }
-      ],
       [
         "expo-location",
         {

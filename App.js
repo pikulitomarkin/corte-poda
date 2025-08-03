@@ -21,6 +21,8 @@ import * as FileSystem from 'expo-file-system';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
+// Firebase REST API - Compatível com APK e Expo Go
+import FirebaseRestAPI from './services/FirebaseRestAPI';
 
 // Ignorar avisos específicos para SDK 29
 // Configuração silenciosa - removido LogBox por compatibilidade com Hermes
@@ -49,12 +51,15 @@ export default function App() {
   const [senha, setSenha] = useState('');
   const [erroLogin, setErroLogin] = useState('');
   
-  // Estado para sincronização
+  // Estados para sincronização Firebase
   const [sincronizando, setSincronizando] = useState(false);
-  const [conectado, setConectado] = useState(true);
   const [ultimaSincronizacao, setUltimaSincronizacao] = useState(null);
-  const [sincronizacaoAutomaticaAtiva, setSincronizacaoAutomaticaAtiva] = useState(false);
   const [mostrarNotificacaoSync, setMostrarNotificacaoSync] = useState(false);
+  const [notificacaoMudancas, setNotificacaoMudancas] = useState(null);
+  
+  // Estado para sincronização
+  const [conectado, setConectado] = useState(true);
+  const [sincronizacaoAutomaticaAtiva, setSincronizacaoAutomaticaAtiva] = useState(false);
   
   // Estado para adicionar novo vão
   const [modalVisible, setModalVisible] = useState(false);
@@ -122,30 +127,14 @@ export default function App() {
     const intervalo = setInterval(async () => {
       if (conectado && logado) {
         try {
-          // Mostra notificação de sincronização
+          // Chama sincronização automática com Firebase
+          await iniciarSincronizacaoAutomatica();
+          
+          // Mostra notificação sutil
           setMostrarNotificacaoSync(true);
-          
-          // Simulando verificação de mudanças no servidor
-          const dadosServidor = await verificarMudancasServidor();
-          if (dadosServidor && dadosServidor.length !== matos.length) {
-            // Se houver mudanças, atualiza os dados locais
-            setMatos(dadosServidor);
-            await salvarDados(dadosServidor);
-            
-            const agora = new Date().toLocaleString('pt-BR');
-            setUltimaSincronizacao(agora);
-            await AsyncStorage.setItem('ultimaSincronizacao', agora);
-          } else {
-            // Atualiza apenas o timestamp de sincronização
-            const agora = new Date().toLocaleString('pt-BR');
-            setUltimaSincronizacao(agora);
-            await AsyncStorage.setItem('ultimaSincronizacao', agora);
-          }
-          
-          // Esconde notificação após 2 segundos
           setTimeout(() => {
             setMostrarNotificacaoSync(false);
-          }, 2000);
+          }, 1500);
           
         } catch (erro) {
           console.log('Erro na sincronização automática:', erro);
@@ -159,6 +148,155 @@ export default function App() {
       setSincronizacaoAutomaticaAtiva(false);
     };
   }, [logado, conectado, matos]);
+
+  // ==================== FUNÇÕES DE SINCRONIZAÇÃO FIREBASE REST API ====================
+  
+  // Sincronização manual com Firebase REST API
+  const sincronizarComNuvem = async () => {
+    if (sincronizando) return;
+    
+    setSincronizando(true);
+    try {
+      console.log('🔄 Iniciando sincronização com Firebase via REST API...');
+      
+      // Sincronização completa bidirecional
+      const dadosSincronizados = await FirebaseRestAPI.fullSync(matos);
+      
+      if (dadosSincronizados !== null) {
+        // Validar e corrigir IDs duplicados
+        const dadosValidados = validarECorrigirIds(dadosSincronizados);
+        
+        setMatos(dadosValidados);
+        await salvarDados(dadosValidados);
+        
+        const agora = new Date().toLocaleString('pt-BR');
+        setUltimaSincronizacao(agora);
+        await AsyncStorage.setItem('ultimaSincronizacao', agora);
+        
+        // Mensagem específica para limpeza
+        const foiLimpeza = dadosValidados.length === 0 && matos.length > 0;
+        
+        Alert.alert(
+          '✅ Sincronização Concluída',
+          foiLimpeza 
+            ? `Dados foram limpos por um administrador.\nTodos os vãos foram removidos.\n\nMulti-dispositivo ativo! 🌐`
+            : `Dados sincronizados com sucesso!\n${dadosValidados.length} vãos atualizados.\n\nMulti-dispositivo ativo! 🌐`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          '⚠️ Erro na Sincronização',
+          'Não foi possível sincronizar com a nuvem. Verifique sua conexão.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('❌ Erro na sincronização:', error);
+      Alert.alert(
+        '❌ Erro',
+        'Erro ao sincronizar: ' + (error.message || 'Erro desconhecido'),
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
+  // Função para sincronização automática com Firebase
+  const iniciarSincronizacaoAutomatica = async () => {
+    console.log('🔄 Auto-sync: Verificando mudanças na nuvem...');
+    try {
+      // 1. Salvar mudanças locais na nuvem
+      await FirebaseRestAPI.saveVaosToCloud(matos);
+      
+      // 2. Buscar dados atualizados da nuvem (inclui mudanças de outros usuários)
+      const dadosSincronizados = await FirebaseRestAPI.fullSync(matos);
+      
+      if (dadosSincronizados && dadosSincronizados.length > 0) {
+        // Validar e corrigir IDs duplicados
+        const dadosValidados = validarECorrigirIds(dadosSincronizados);
+        
+        // 3. Detectar mudanças específicas
+        const mudancasDetectadas = detectarMudancas(matos, dadosValidados);
+        
+        if (mudancasDetectadas.length > 0) {
+          console.log(`📥 Auto-sync: ${mudancasDetectadas.length} mudanças de outros usuários`);
+          
+          // Atualizar dados
+          setMatos(dadosValidados);
+          await salvarDados(dadosValidados);
+          
+          // Mostrar notificação das mudanças
+          mostrarNotificacaoMudancas(mudancasDetectadas);
+        }
+        
+        // 4. Atualizar timestamp
+        const agora = new Date().toLocaleString('pt-BR');
+        setUltimaSincronizacao(agora);
+        await AsyncStorage.setItem('ultimaSincronizacao', agora);
+        
+        console.log(`✅ Auto-sync: ${dadosValidados.length} vãos sincronizados`);
+      }
+    } catch (error) {
+      console.log('⚠️ Erro na sincronização automática:', error.message);
+      // Em caso de erro, apenas salva localmente
+      await salvarDados(matos);
+    }
+  };
+
+  // Detectar mudanças específicas entre dados locais e da nuvem
+  const detectarMudancas = (dadosLocais, dadosNuvem) => {
+    const mudancas = [];
+    
+    dadosNuvem.forEach(itemNuvem => {
+      const itemLocal = dadosLocais.find(item => item.id === itemNuvem.id);
+      
+      if (!itemLocal) {
+        // Novo item adicionado
+        mudancas.push({
+          tipo: 'adicionado',
+          item: itemNuvem,
+          descricao: `Novo vão: ${itemNuvem.descricao}`
+        });
+      } else if (itemLocal.status !== itemNuvem.status) {
+        // Status alterado
+        const statusTexto = {
+          'pendente': 'Pendente',
+          'iniciado': 'Em andamento', 
+          'concluido': 'Concluído'
+        };
+        
+        mudancas.push({
+          tipo: 'status_alterado',
+          item: itemNuvem,
+          statusAnterior: itemLocal.status,
+          statusNovo: itemNuvem.status,
+          descricao: `${itemNuvem.descricao}: ${statusTexto[itemLocal.status]} → ${statusTexto[itemNuvem.status]}`
+        });
+      }
+    });
+    
+    return mudancas;
+  };
+
+  // Mostrar notificação das mudanças
+  const mostrarNotificacaoMudancas = (mudancas) => {
+    if (mudancas.length === 0) return;
+    
+    const primeiraMudanca = mudancas[0];
+    const mensagem = mudancas.length === 1 
+      ? primeiraMudanca.descricao
+      : `${mudancas.length} atualizações recebidas`;
+    
+    setNotificacaoMudancas(mensagem);
+    
+    // Auto-hide após 4 segundos
+    setTimeout(() => {
+      setNotificacaoMudancas(null);
+    }, 4000);
+  };
+
+  // ==================== FIM FUNÇÕES FIREBASE REST API ====================
 
   // Verificar login existente
   const verificarLogin = async () => {
@@ -182,7 +320,16 @@ export default function App() {
     try {
       const dadosSalvos = await AsyncStorage.getItem('vaos');
       if (dadosSalvos) {
-        setMatos(JSON.parse(dadosSalvos));
+        const dados = JSON.parse(dadosSalvos);
+        // Validar e corrigir IDs duplicados ao carregar
+        const dadosValidados = validarECorrigirIds(dados);
+        setMatos(dadosValidados);
+        
+        // Se houve correção, salvar os dados corrigidos
+        if (dadosValidados.length !== dados.length || dadosValidados.some((v, i) => v.id !== (dados[i]?.id))) {
+          console.log('📁 Dados locais corrigidos e salvos');
+          await salvarDados(dadosValidados);
+        }
       } else {
         // Adicionar um vão de exemplo se não houver dados
         adicionarVaoExemplo();
@@ -300,8 +447,9 @@ export default function App() {
       }
       
       // Mapear dados da planilha para o formato do app
+      const agora = new Date();
       const novosVaos = jsonData.map((linha, index) => ({
-        id: Date.now() + index,
+        id: gerarIdUnico(),
         descricao: linha.Descricao || 'Sem descrição',
         localizacao: linha.Localizacao || 'Local não especificado',
         area: linha.Area || '0m²',
@@ -309,16 +457,44 @@ export default function App() {
         status: 'pendente',
         dataInicio: null,
         dataConclusao: null,
-        atualizadoPor: null
+        atualizadoPor: null,
+        lastUpdated: agora.toISOString()
       }));
       
+      // Validar e corrigir IDs duplicados
+      const novosVaosValidados = validarECorrigirIds(novosVaos);
+      
       // Atualizar a lista
-      setMatos(novosVaos);
-      salvarDados(novosVaos);
+      setMatos(novosVaosValidados);
+      salvarDados(novosVaosValidados);
+      
+      // Sincronizar dados importados com Firebase
+      if (conectado) {
+        console.log('🔄 Sincronizando dados importados com a nuvem...');
+        setMostrarNotificacaoSync(true);
+        
+        try {
+          // Enviar todos os novos vãos para a nuvem
+          await FirebaseRestAPI.saveVaosToCloud(novosVaosValidados);
+          console.log(`🔄 Sincronizados ${novosVaosValidados.length} vãos para a nuvem`);
+          
+          // Atualizar última sincronização
+          const agora = new Date().toLocaleString('pt-BR');
+          setUltimaSincronizacao(agora);
+          await AsyncStorage.setItem('ultimaSincronizacao', agora);
+          
+          console.log('✅ Dados importados sincronizados com sucesso');
+        } catch (erroSync) {
+          console.log('⚠️ Erro ao sincronizar dados importados:', erroSync);
+          // Continua mesmo com erro de sincronização
+        } finally {
+          setMostrarNotificacaoSync(false);
+        }
+      }
       
       Alert.alert(
         'Importação Concluída', 
-        `${novosVaos.length} vãos foram importados com sucesso.`
+        `${novosVaosValidados.length} vãos foram importados com sucesso.${conectado ? '\n(Dados também salvos na nuvem)' : ''}`
       );
       
     } catch (erro) {
@@ -467,51 +643,6 @@ export default function App() {
     });
   };
 
-  // Função para sincronizar dados manualmente
-  const sincronizarDados = async () => {
-    if (!conectado) {
-      Alert.alert('Sem conexão', 'Você precisa estar conectado à internet para sincronizar.');
-      return;
-    }
-    
-    setSincronizando(true);
-    
-    try {
-      // Simulando envio dos dados para o servidor
-      await enviarDadosParaServidor(matos);
-      
-      // Simulando recebimento de dados atualizados do servidor
-      const dadosAtualizados = await verificarMudancasServidor();
-      
-      // Atualiza os dados locais com os dados do servidor
-      if (dadosAtualizados) {
-        setMatos(dadosAtualizados);
-        await salvarDados(dadosAtualizados);
-      }
-      
-      const agora = new Date().toLocaleString('pt-BR');
-      setUltimaSincronizacao(agora);
-      await AsyncStorage.setItem('ultimaSincronizacao', agora);
-      
-      Alert.alert('Sucesso', 'Dados sincronizados com sucesso!');
-    } catch (erro) {
-      Alert.alert('Erro', 'Erro ao sincronizar dados. Tente novamente.');
-      console.log('Erro na sincronização:', erro);
-    } finally {
-      setSincronizando(false);
-    }
-  };
-
-  // Simula envio de dados para o servidor
-  const enviarDadosParaServidor = async (dados) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log('Dados enviados para o servidor:', dados.length, 'vãos');
-        resolve(true);
-      }, 1000);
-    });
-  };
-
   // Função para limpar todos os dados importados (apenas admin)
   const limparDadosImportados = () => {
     if (!isAdmin()) {
@@ -536,6 +667,23 @@ export default function App() {
               setMatos([]);
               await AsyncStorage.removeItem('matos');
               
+              // Sincronizar limpeza com Firebase (limpar dados na nuvem)
+              if (conectado) {
+                console.log('🔄 Limpando dados da nuvem...');
+                setMostrarNotificacaoSync(true);
+                
+                try {
+                  // Limpar todos os vãos da nuvem
+                  await FirebaseRestAPI.limparTodosVaos();
+                  console.log('✅ Dados limpos da nuvem com sucesso');
+                } catch (erroSync) {
+                  console.log('⚠️ Erro ao limpar dados da nuvem:', erroSync);
+                  // Mesmo com erro na nuvem, continua com limpeza local
+                } finally {
+                  setMostrarNotificacaoSync(false);
+                }
+              }
+              
               // Atualiza a última sincronização
               const agora = new Date().toLocaleString('pt-BR');
               setUltimaSincronizacao(agora);
@@ -543,7 +691,7 @@ export default function App() {
               
               Alert.alert(
                 '✅ Sucesso',
-                'Todos os dados foram removidos com sucesso!',
+                `Todos os dados foram removidos com sucesso!${conectado ? '\n(Dados também limpos da nuvem)' : ''}`,
                 [{ text: 'OK' }]
               );
             } catch (erro) {
@@ -558,7 +706,7 @@ export default function App() {
 
   const adicionarVaoExemplo = () => {
     const exemplo = {
-      id: Date.now(),
+      id: gerarIdUnico(),
       descricao: 'Corte Vão Principal - Linha A',
       localizacao: 'Setor Norte - KM 15',
       area: '150m²',
@@ -566,7 +714,8 @@ export default function App() {
       status: 'pendente',
       dataInicio: null,
       dataConclusao: null,
-      atualizadoPor: null
+      atualizadoPor: null,
+      lastUpdated: new Date().toISOString()
     };
     const novosVaos = [exemplo];
     setMatos(novosVaos);
@@ -580,13 +729,14 @@ export default function App() {
     }
     
     const vao = {
-      id: Date.now(),
+      id: gerarIdUnico(),
       ...novoVao,
       dataNecessidade: processarDataBrasileira(novoVao.dataNecessidade), // Processa a data antes de salvar
       status: 'pendente',
       dataInicio: null,
       dataConclusao: null,
-      atualizadoPor: null
+      atualizadoPor: null,
+      lastUpdated: new Date().toISOString()
     };
     
     const novosVaos = [...matos, vao];
@@ -615,7 +765,8 @@ export default function App() {
           status: novoStatus,
           dataInicio: novoStatus === 'iniciado' ? dataHoraCompleta : vao.dataInicio,
           dataConclusao: novoStatus === 'concluido' ? dataHoraCompleta : vao.dataConclusao,
-          atualizadoPor: usuario.username
+          atualizadoPor: usuario.username,
+          lastUpdated: agora.toISOString() // CRÍTICO: Timestamp para sincronização
         };
       }
       return vao;
@@ -719,6 +870,39 @@ export default function App() {
       console.log('Erro ao formatar data:', dataString, error);
       return 'Data inválida';
     }
+  };
+
+  // Função para validar e corrigir IDs duplicados
+  const validarECorrigirIds = (vaos) => {
+    const idsVistos = new Set();
+    const vaosCorrigidos = [];
+    
+    vaos.forEach(vao => {
+      if (!vao.id || idsVistos.has(vao.id)) {
+        // ID duplicado ou ausente - gerar novo ID
+        const novoId = gerarIdUnico();
+        console.warn(`⚠️ ID duplicado/ausente corrigido: ${vao.id} → ${novoId}`);
+        vaosCorrigidos.push({ ...vao, id: novoId });
+        idsVistos.add(novoId);
+      } else {
+        vaosCorrigidos.push(vao);
+        idsVistos.add(vao.id);
+      }
+    });
+    
+    if (vaosCorrigidos.length !== vaos.length || vaosCorrigidos.some((v, i) => v.id !== vaos[i].id)) {
+      console.log(`✅ IDs corrigidos: ${vaos.length} → ${vaosCorrigidos.length} vãos únicos`);
+    }
+    
+    return vaosCorrigidos;
+  };
+
+  // Função para gerar ID único mais robusto
+  const gerarIdUnico = () => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+    const userId = usuario?.username?.slice(0, 3) || 'usr';
+    return `${userId}_${timestamp}_${random}`;
   };
 
   // Verificar se é admin
@@ -951,7 +1135,7 @@ export default function App() {
               
               <TouchableOpacity 
                 style={styles.modernSyncButton} 
-                onPress={sincronizarDados}
+                onPress={sincronizarComNuvem}
                 disabled={sincronizando}
               >
                 {sincronizacaoAutomaticaAtiva && <View style={styles.autoSyncIndicator} />}
@@ -1122,6 +1306,33 @@ export default function App() {
                     <Text style={styles.adminActionSubtitle}>Importados</Text>
                   </LinearGradient>
                 </TouchableOpacity>
+                
+                {/* Botão de Sincronização Firebase */}
+                <TouchableOpacity 
+                  style={styles.adminActionCard} 
+                  onPress={sincronizarComNuvem}
+                  disabled={sincronizando}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={sincronizando ? ['#9E9E9E', '#BDBDBD'] : ['#FF9800', '#FFB74D']}
+                    style={styles.adminActionGradient}
+                  >
+                    <View style={styles.adminActionIcon}>
+                      {sincronizando ? (
+                        <ActivityIndicator size="small" color="white" />
+                      ) : (
+                        <Text style={styles.adminActionIconText}>☁️</Text>
+                      )}
+                    </View>
+                    <Text style={styles.adminActionTitle}>
+                      {sincronizando ? 'Sincronizando...' : 'Sincronizar'}
+                    </Text>
+                    <Text style={styles.adminActionSubtitle}>
+                      {ultimaSincronizacao ? 'Firebase' : 'Primeira Sync'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
               </View>
               
               {/* Estatísticas Avançadas para Admin */}
@@ -1152,6 +1363,62 @@ export default function App() {
                   </View>
                 </View>
               </View>
+              
+              {/* Status de Sincronização Firebase */}
+              <View style={styles.syncStatusContainer}>
+                <Text style={styles.syncStatusTitle}>🔄 Status de Sincronização</Text>
+                <View style={styles.syncStatusContent}>
+                  <View style={styles.syncStatusItem}>
+                    <Text style={styles.syncStatusIcon}>
+                      {sincronizacaoAutomaticaAtiva ? '🟢' : '🔴'}
+                    </Text>
+                    <View style={styles.syncStatusInfo}>
+                      <Text style={styles.syncStatusLabel}>Sincronização Automática</Text>
+                      <Text style={styles.syncStatusValue}>
+                        {sincronizacaoAutomaticaAtiva ? 'Ativa (30s)' : 'Inativa'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.syncStatusItem}>
+                    <Text style={styles.syncStatusIcon}>⏰</Text>
+                    <View style={styles.syncStatusInfo}>
+                      <Text style={styles.syncStatusLabel}>Última Sincronização</Text>
+                      <Text style={styles.syncStatusValue}>
+                        {ultimaSincronizacao || 'Nunca sincronizado'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <View style={styles.syncStatusItem}>
+                    <Text style={styles.syncStatusIcon}>
+                      {conectado ? '🌐' : '📱'}
+                    </Text>
+                    <View style={styles.syncStatusInfo}>
+                      <Text style={styles.syncStatusLabel}>Modo de Operação</Text>
+                      <Text style={styles.syncStatusValue}>
+                        {conectado ? 'Online - Multi-dispositivo ativo' : 'Offline - Local apenas'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+          
+          {/* Notificação de Sincronização */}
+          {mostrarNotificacaoSync && (
+            <View style={styles.syncNotification}>
+              <ActivityIndicator size="small" color="#4CAF50" />
+              <Text style={styles.syncNotificationText}>Sincronizando com a nuvem...</Text>
+            </View>
+          )}
+          
+          {/* Notificação de Mudanças de Outros Usuários */}
+          {notificacaoMudancas && (
+            <View style={styles.changesNotification}>
+              <Text style={styles.changesNotificationIcon}>🔄</Text>
+              <Text style={styles.changesNotificationText}>{notificacaoMudancas}</Text>
             </View>
           )}
           
@@ -1162,7 +1429,15 @@ export default function App() {
                 // Admin vê todos os vãos, usuário comum não vê os concluídos
                 return isAdmin() || vao.status !== 'concluido';
               })
-              .map((vao) => {
+              // Garantir IDs únicos para evitar o erro de chaves duplicadas
+              .filter((vao, index, array) => {
+                const firstIndex = array.findIndex(v => v.id === vao.id);
+                if (firstIndex !== index) {
+                  console.warn(`⚠️ ID duplicado encontrado na renderização: ${vao.id}`);
+                }
+                return firstIndex === index;
+              })
+              .map((vao, renderIndex) => {
               // Calcular status do prazo
               const hoje = new Date();
               const dataNecessidade = new Date(vao.dataNecessidade);
@@ -1217,7 +1492,7 @@ export default function App() {
               };
 
               return (
-                <View key={vao.id} style={getCardStyle()}>
+                <View key={`${vao.id}_${renderIndex}`} style={getCardStyle()}>
                   <View style={styles.vaoHeader}>
                     <View style={styles.vaoTitleContainer}>
                       <Text style={styles.vaoIcon}>{getStatusIcon(vao)}</Text>
@@ -1396,14 +1671,6 @@ export default function App() {
           </View>
           
           </ScrollView>
-          
-          {/* Notificação de Sincronização */}
-          {mostrarNotificacaoSync && (
-            <View style={styles.syncNotification}>
-              <Text style={styles.syncNotificationIcon}>🔄</Text>
-              <Text style={styles.syncNotificationText}>Sincronizando...</Text>
-            </View>
-          )}
           
         </SafeAreaView>
       ) : (
@@ -2448,29 +2715,24 @@ const styles = StyleSheet.create({
     top: 100,
     right: 15,
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 25,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
     zIndex: 1000,
   },
   
-  syncNotificationIcon: {
+  syncNotificationText: {
     fontSize: 12,
     color: '#ffffff',
-    marginRight: 5,
-  },
-  
-  syncNotificationText: {
-    fontSize: 11,
-    color: '#ffffff',
     fontWeight: '600',
+    marginLeft: 8,
   },
   
   // Overlay de sincronização
@@ -2508,5 +2770,96 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4CAF50',
     fontWeight: '600',
+  },
+  
+  // ============ ESTILOS PARA FIREBASE SYNC UI ============
+  
+  // Container do status de sincronização
+  syncStatusContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 15,
+    marginHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  
+  syncStatusTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2E7D32',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  
+  syncStatusContent: {
+    gap: 12,
+  },
+  
+  syncStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  
+  syncStatusIcon: {
+    fontSize: 20,
+    marginRight: 12,
+    width: 24,
+    textAlign: 'center',
+  },
+  
+  syncStatusInfo: {
+    flex: 1,
+  },
+  
+  syncStatusLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: 2,
+  },
+  
+  syncStatusValue: {
+    fontSize: 12,
+    color: '#6c757d',
+    fontStyle: 'italic',
+  },
+  
+  // Notificação de mudanças de outros usuários
+  changesNotification: {
+    position: 'absolute',
+    top: 140,
+    right: 15,
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+    zIndex: 1000,
+    maxWidth: 280,
+  },
+  
+  changesNotificationIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  
+  changesNotificationText: {
+    fontSize: 12,
+    color: '#ffffff',
+    fontWeight: '600',
+    flex: 1,
   },
 });

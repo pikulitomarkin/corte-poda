@@ -15,7 +15,7 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleDebug",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       }
     },
     "preview": {
@@ -27,7 +27,7 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
       }
     },
     "production": {
@@ -39,7 +39,13 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
+      }
+    },
+    "simple": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote"
       }
     },
     "production-apk": {
@@ -47,7 +53,28 @@
       "android": {
         "buildType": "apk",
         "gradleCommand": ":app:assembleRelease",
-        "credentialsSource": "local"
+        "credentialsSource": "remote"
+      }
+    },
+    "simple-apk": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote",
+        "image": "ubuntu-22.04-jdk-11-ndk-r21e",
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g -Dorg.gradle.parallel=false"
+        }
+      }
+    },
+    "stable-build": {
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "remote",
+        "image": "ubuntu-20.04-jdk-8-ndk-r21e",
+        "gradleCommand": ":app:assembleRelease",
+        "env": {
+          "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx2g"
+        }
       }
     }
   },
