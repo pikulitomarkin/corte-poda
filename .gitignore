@@ -28,6 +28,10 @@ keystore-temp.b64
 credentials.json
 android.gradle.properties
 
+# Gradle binaries (large files)
+gradle-*.zip
+gradle-*-bin.zip
+
 # Cache
 .cache/
 
